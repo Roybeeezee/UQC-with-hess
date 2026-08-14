@@ -1,0 +1,38 @@
+{
+  "name": "uqc",
+  "version": "1.2.0",
+  "description": "UQC - unified launcher for KIT Check and QC Check",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "node obfuscate-build.js index.html kit-check.html qc-check.html && electron-builder --win",
+    "dist:mac": "node obfuscate-build.js index.html kit-check.html qc-check.html && electron-builder --mac",
+    "dist:all": "node obfuscate-build.js index.html kit-check.html qc-check.html && electron-builder --win --mac"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "31.0.0",
+    "electron-builder": "24.13.3",
+    "javascript-obfuscator": "4.1.0"
+  },
+  "build": {
+    "appId": "com.missionlink.uqc",
+    "productName": "UQC",
+    "files": [
+      "index.html",
+      "kit-check.html",
+      "qc-check.html",
+      "main.js",
+      "vendor/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "artifactName": "UQC-v${version}.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "artifactName": "UQC-v${version}.${ext}"
+    }
+  }
+}
