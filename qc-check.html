@@ -1,0 +1,2400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QC Check</title>
+<!-- Spreadsheet libraries. Loaded from the local vendor/ folder so the tool works with no
+     internet connection. If the local copies are missing, these fall back to the public CDN so
+     nothing breaks - but a build that ships the vendor/ folder never reaches out to the internet. -->
+<script src="vendor/xlsx.full.min.js"></script>
+<script>window.XLSX||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/scr'+'ipt>')</script>
+<script src="vendor/exceljs.min.js"></script>
+<script>window.ExcelJS||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"><\/scr'+'ipt>')</script>
+<style>
+  :root{--bg:#150c2e;--panel:#241a4d;--muted:#b3a8e6;--text:#f3f0ff;--accent:#8b7cff;--good:#3ddc97;--warn:#ffc861;--review:#c4b5fd;--bad:#ff7a7a;--line:#3d2e70;}
+  *{box-sizing:border-box} html{overflow-x:auto} body{margin:0;min-width:900px;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#150c2e,#1e1550);color:var(--text)}
+  header{padding:24px 22px;border-bottom:1px solid var(--line);background:rgba(21,12,46,.85);position:sticky;top:0;backdrop-filter:blur(8px);z-index:5}
+  h1{margin:0 0 6px;font-size:24px} p{margin:0;color:var(--muted);line-height:1.5;font-size:13px}
+  main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px}
+  .card{background:rgba(36,26,77,.92);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin-bottom:16px}
+  .card h2{margin:0 0 12px;font-size:16px}
+  .chip{display:inline-block;padding:5px 10px;border-radius:999px;background:#2e2160;color:#e0d6ff;margin:4px 6px 0 0;font-size:11px}
+  label{display:block;font-size:12px;color:#cabdf0;margin:10px 0 6px}
+  input,select,button{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #4a3a80;background:#1a1140;color:var(--text);font-size:13px}
+  input[type=file]{padding:8px}
+  button{cursor:pointer;background:linear-gradient(135deg,#8b5cf6,#4f6df6);border:none;font-weight:700;margin-top:10px}
+  button.secondary{background:#2a2060;border:1px solid #4a3a80}
+  /* Admin panel styles */
+  #adminBar{background:#180f38;border-top:1px solid #3d2e70;padding:8px 24px;display:flex;align-items:center;gap:10px;font-size:12px;color:#b3a8e6;position:sticky;bottom:0;z-index:100}
+  #adminBar input{width:90px;padding:4px 8px;font-size:12px;background:#241a4d;border:1px solid #4a3a80;color:#f3f0ff;border-radius:6px;letter-spacing:3px}
+  #adminBar button{padding:4px 12px;font-size:12px}
+  #adminPanel{display:none;background:#1c1440;border:2px solid #8b5cf6;border-radius:14px;padding:22px 26px;margin:16px 0}
+  #adminPanel h2{color:#a78bfa;margin:0 0 6px}
+  #adminPanel .admin-warning{background:#2a1a0a;border:1px solid #ffc861;border-radius:8px;padding:10px 14px;margin-bottom:16px;color:#ffc861;font-size:13px}
+  #adminPanel .ref-section{margin-bottom:16px}
+  #adminPanel .ref-section h3{color:#c4b5fd;font-size:13px;margin:0 0 6px}
+  #adminPanel table{width:100%;border-collapse:collapse;font-size:12px}
+  #adminPanel table th{background:#2e2160;color:#e0d6ff;padding:5px 8px;text-align:left;font-weight:600}
+  #adminPanel table td{padding:5px 8px;border-bottom:1px solid #2e2160;color:#dccffb;vertical-align:top}
+  #adminPanel table tr:nth-child(even) td{background:#1a1140}
+  #adminPanel code{font-family:monospace;background:#362a66;padding:2px 6px;border-radius:4px;color:#a78bfa;font-size:11px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .stat{padding:14px;border-radius:14px;background:#1c1440;border:1px solid #3d2e70;text-align:center}
+  .stat .muted{font-size:11px;color:var(--muted)} .stat .n{font-size:26px;font-weight:800;margin-top:6px}
+  .n.good{color:var(--good)} .n.warn{color:var(--warn)} .n.bad{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:8px 10px;border-bottom:1px solid #3d2e70;text-align:left;vertical-align:top}
+  th{color:#e4dbff;background:#1c1440;position:sticky;top:0}
+  tr:hover td{background:#241a4d}
+  tr.row-fail td{background:rgba(255,122,122,0.08)} tr.row-fail:hover td{background:rgba(255,122,122,0.16)}
+  tr.row-warn td{background:rgba(255,200,97,0.08)} tr.row-warn:hover td{background:rgba(255,200,97,0.16)}
+  .issue-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px}
+  .issue-label{width:230px;flex-shrink:0;color:#e4dbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .issue-bar-track{flex:1;height:10px;background:#2a2060;border-radius:6px;overflow:hidden}
+  .issue-bar-fill{height:100%;border-radius:6px}
+  .issue-count{width:48px;text-align:right;color:var(--muted);flex-shrink:0}
+  .map-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .map-row label{width:160px;flex-shrink:0;margin:0;font-size:12px;color:#cabdf0}
+  .map-row select{flex:1;padding:7px 8px;font-size:12px}
+  .pill{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .pill.PASS{background:#10301f;color:var(--good)} .pill.WARN{background:#3a2c0f;color:var(--warn)} .pill.REVIEW{background:#362a66;color:var(--review)} .pill.FAIL{background:#3a1515;color:var(--bad)}
+  .n.review{color:var(--review)}
+  .tablewrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .toolbar input,.toolbar select{width:auto;flex:1;min-width:160px}
+  .small{font-size:11px;color:var(--muted)}
+  .bar{height:8px;border-radius:6px;background:#2a2060;overflow:hidden;display:flex;margin-top:10px}
+  .bar span{display:block;height:100%}
+  .empty{padding:30px;text-align:center;color:var(--muted)}
+  @media (max-width: 980px){main{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>QC Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v1.2.0</span></h1>
+  <p>Governance rules (categories, required fields, controlled values) are built in per client. Choose a client, upload your data export, and run QC.</p>
+  <div style="max-width:280px;margin-top:14px">
+    <label style="margin:0 0 6px">Client</label>
+    <select id="clientSelect">
+      <option value="GENV">GenV</option>
+      <option value="XOM">XOM (ExxonMobil)</option>
+    </select>
+  </div>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>1. Upload export</h2>
+      <label>Data export file (.csv, .xlsx)</label>
+      <input type="file" id="dataFile" accept=".csv,.xlsx,.xls" />
+      <div class="small" id="fileInfo" style="margin-top:8px"></div>
+      <label style="margin-top:14px">ODIDB export (optional — cross-checks Original File Name)</label>
+      <input type="file" id="odidbFile" accept=".csv,.xlsx,.xls,.xlsm" />
+      <div class="small" id="odidbFileInfo" style="margin-top:8px"></div>
+      <button id="runBtn" disabled>Run QC</button>
+      <div id="runStatus" class="small" style="display:none;margin-top:8px;color:var(--accent)">Running QC checks…</div>
+      <button class="secondary" id="downloadAnnotatedBtn" disabled>Download Highlighted File (original + flags)</button>
+      <button class="secondary" id="clearBtn">Clear / Start Over</button>
+    </div>
+    <div class="card">
+      <h2>Built-in governance rules</h2>
+      <div id="rulesChips"></div>
+      <p style="margin-top:10px" id="rulesSummary"></p>
+    </div>
+    <div class="card">
+      <h2>Expected columns</h2>
+      <p>Header matching is flexible (case/spacing/punctuation-insensitive, with or without "Inventory:" prefixes). Recognized fields include:</p>
+      <p class="small" id="expectedCols"></p>
+    </div>
+  </section>
+
+  <!-- Admin Panel (unlocked by PIN) -->
+  <div id="adminPanel">
+    <h2>🔒 Admin Panel</h2>
+    <div class="admin-warning">
+      ⚠ You are in Admin Mode. Changes to this file affect governance rules for all users.<br>
+      Always save a dated backup before editing (e.g. <b>QC Tool_BACKUP_20260706.html</b>).<br>
+      Real access control must be managed via file/folder permissions on the master copy.
+    </div>
+
+    <div class="ref-section">
+      <h3>Configuration Section — Where All Routine Changes Go</h3>
+      <p style="font-size:12px;color:#b3a8e6;margin:0 0 8px">Open QC Tool.html in Notepad, Notepad++, or VS Code. Use Ctrl+F to find each section.</p>
+      <table>
+        <tr><th>What to change</th><th>Ctrl+F search term</th><th>What to add / edit</th></tr>
+        <tr><td>Add Digital Format (both engines)</td><td><code>const DIGITAL_FORMAT_LIST</code></td><td>Add <code>"NEWFORMAT",</code> inside the list. UPPERCASE. Comma after every entry except last.</td></tr>
+        <tr><td>Add Cat/Sub-Cat (both engines)</td><td><code>const GOVERNANCE_SHARED</code></td><td>Add <code>["CATEGORY","SUB-CATEGORY"],</code> before the closing <code>];</code></td></tr>
+        <tr><td>Add UNKNOWN format pass-phrase</td><td><code>const UNKNOWN_FORMAT_PHRASES</code></td><td>Add <code>'PHRASE',</code> in UPPERCASE inside the list.</td></tr>
+        <tr><td>Exempt category from dup detection</td><td><code>const DUPLICATE_EXEMPT_CATEGORIES</code></td><td>Add <code>'CATEGORYNAME',</code> in UPPERCASE inside the <code>Set([ ])</code>.</td></tr>
+        <tr><td>Change Admin PIN</td><td><code>const ADMIN_PIN</code></td><td>Change the value in single quotes to your new PIN.</td></tr>
+      </table>
+    </div>
+
+    <div class="ref-section">
+      <h3>XOM-Only Settings (below END OF CONFIGURATION marker)</h3>
+      <table>
+        <tr><th>What to change</th><th>Ctrl+F search term</th><th>How to edit</th></tr>
+        <tr><td>OOS restricted countries</td><td><code>const OOS_COUNTRIES_XOM</code></td><td>Add/remove country names in UPPERCASE inside <code>[ ]</code> in double quotes, comma-separated.</td></tr>
+        <tr><td>Restricted sources (Pioneer, Denbury etc.)</td><td><code>const RESTRICTED_SOURCES_XOM</code></td><td>Add/remove source names in UPPERCASE inside <code>[ ]</code> in double quotes, comma-separated.</td></tr>
+        <tr><td>Exception codes</td><td><code>const EXCEPTION_CODES_XOM</code></td><td>Follow the same format as existing entries. Each needs code, description, and lastCondition.</td></tr>
+      </table>
+    </div>
+
+    <div class="ref-section">
+      <h3>Formatting Rules — Common Mistakes</h3>
+      <table>
+        <tr><th>Mistake</th><th>What happens</th><th>Fix</th></tr>
+        <tr><td>Missing comma after an entry</td><td>Blank page — syntax error</td><td>Every entry needs a comma except the very last one before the closing bracket.</td></tr>
+        <tr><td>Extra comma after the last entry</td><td>Blank page — syntax error</td><td>Remove the trailing comma from the last entry.</td></tr>
+        <tr><td>Lowercase value</td><td>QC misses the match</td><td>All categories, formats, and phrases must be UPPERCASE.</td></tr>
+        <tr><td>Wrong quotes (curly instead of straight)</td><td>Syntax error</td><td>Use straight quotes only. Never edit in Word — it auto-replaces with curly quotes.</td></tr>
+        <tr><td>Changes not showing</td><td>Browser cached old version</td><td>Press Ctrl+Shift+R to hard-refresh.</td></tr>
+      </table>
+    </div>
+
+    <div class="ref-section">
+      <h3>Important Decisions — Do Not Change Without Reading the Decisions Log</h3>
+      <table>
+        <tr><th>Rule / Behaviour</th><th>Why it exists — do not revert</th></tr>
+        <tr><td>Duplicate matching is exact including extension</td><td>Files like 22_27a_1.chk and 22_27a_1.lst are different files. Fuzzy matching caused false positives on extension and numeric variants (-1.0 vs 1.0).</td></tr>
+        <tr><td>Acceptable/Poor/Extremely Poor + blank Exception Code does NOT flag (XOM)</td><td>Files reading back complete from degraded media get no exception code per governance doc. Reverting generates hundreds of false failures.</td></tr>
+        <tr><td>LAS-DLIS-Must-Be-Blank applies to WELL LOG/WIRELINE (no exemption)</td><td>For WELL LOG/WIRELINE with DLIS or LAS format, Title and Description must be BLANK, same as every other category. LIS format is not included in this rule. Corrected 2026-07.</td></tr>
+        <tr><td>NAVIGATION exempt from all duplicate checks</td><td>Nav data legitimately reuses filenames across many media items — not a real duplicate.</td></tr>
+        <tr><td>Report dedup key is KDM Item ID + Field + Rule</td><td>Multi-media items appear on many export rows. Row-number key caused same issue to appear N times per item.</td></tr>
+      </table>
+    </div>
+
+    <button class="secondary" onclick="lockAdmin()" style="margin-top:8px">🔒 Lock Admin Panel</button>
+  </div>
+
+  <section>
+    <div class="card">
+      <h2>QC Dashboard</h2>
+      <div class="grid" id="statGrid">
+        <div class="stat"><div class="muted">Rows checked</div><div class="n" id="statTotal">–</div></div>
+        <div class="stat"><div class="muted">Pass</div><div class="n good" id="statPass">–</div></div>
+        <div class="stat"><div class="muted">Review</div><div class="n review" id="statReview">–</div></div>
+        <div class="stat"><div class="muted">Warn</div><div class="n warn" id="statWarn">–</div></div>
+        <div class="stat"><div class="muted">Fail</div><div class="n bad" id="statFail">–</div></div>
+      </div>
+      <div class="bar" id="statBar"></div>
+      <div id="topIssuesPanel" style="display:none;margin-top:14px">
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Top rules triggered</div>
+        <div id="topIssuesList"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>QC Issues Report</h2>
+      <div class="toolbar">
+        <input id="filterText" placeholder="Filter by category, field, reason…" />
+        <select id="filterSeverity">
+          <option value="">All severities</option>
+          <option value="FAIL">FAIL only</option>
+          <option value="WARN">WARN only</option>
+          <option value="REVIEW">REVIEW only</option>
+          <option value="PASS">PASS only</option>
+        </select>
+        <span class="small" id="exceptionCount"></span>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Row</th><th>KDM Item ID</th><th>QC Name</th><th>Job Number</th><th>Category</th><th>Sub-Category</th><th>Digital Format</th><th>Field</th><th>Rule</th><th>Actual</th><th>Result</th><th>Reason</th></tr></thead>
+          <tbody id="exceptionBody"><tr><td colspan="11" class="empty">Upload a data export and run QC to see issues here.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="adminBar">
+  <span>🔒 Admin</span>
+  <input type="password" id="adminPinInput" placeholder="PIN" maxlength="10" />
+  <button onclick="tryUnlockAdmin()">Unlock</button>
+  <span id="adminBarMsg" style="color:#ff7a7a;font-size:11px"></span>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════════
+   QC TOOL — CONFIGURATION SECTION
+   ═══════════════════════════════════════════════════════════════════════════════
+   THIS IS THE ONLY SECTION YOU NEED TO EDIT FOR ROUTINE MAINTENANCE.
+
+   Both the GenV and XOM engines share every list in this section.
+   You should never need to touch anything below the END OF CONFIGURATION marker.
+
+   HOW TO ADD/REMOVE ITEMS:
+     Category/SubCat : add ["CATEGORY","SUB-CATEGORY"],  or delete the line
+     Digital Formats : add "NEWFORMAT",                  or delete the entry
+     Pass-phrases    : add 'NEWPHRASE',                  or delete the entry
+     Dup-exempt cats : add 'CATEGORYNAME',               or delete the entry
+   Rules: UPPERCASE, correct quotes, comma after every entry except the very last.
+   ALWAYS BACK UP THE FILE BEFORE EDITING.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+
+/* ─── 1. CATEGORY / SUB-CATEGORY ────────────────────────────────────────────
+   Shared by both GenV and XOM engines. Add a new pair: ["CATEGORY","SUB-CATEGORY"],
+   Remove a pair: delete that line. Keep a comma after every line except the last. */
+const GOVERNANCE_SHARED = [
+  ["ADMIN", "AFE"],
+  ["ADMIN", "CONTRACT"],
+  ["ADMIN", "CORRESPONDENCE"],
+  ["ADMIN", "FOREIGN LANGUAGE"],
+  ["ADMIN", "INVOICE"],
+  ["ADMIN", "LAND"],
+  ["ADMIN", "LEASE AGREEMENT"],
+  ["ADMIN", "LEGAL"],
+  ["ADMIN", "MISC"],
+  ["ADMIN", "REPORT"],
+  ["ADMIN", "SUPPORT"],
+  ["ADMIN", "TRANSMITTALS"],
+  ["COMPLETION/WORKOVER", "LOG"],
+  ["COMPLETION/WORKOVER", "PERFORATION"],
+  ["COMPLETION/WORKOVER", "PROCEDURE"],
+  ["COMPLETION/WORKOVER", "REPORT"],
+  ["COMPLETION/WORKOVER", "STIMULATION"],
+  ["CSEM", "FIELD CALIBRATED"],
+  ["CSEM", "FIELD RAW"],
+  ["CSEM", "INVERSION"],
+  ["CSEM", "NAVIGATION"],
+  ["CSEM", "PROCESSED"],
+  ["CSEM", "SUPPORT"],
+  ["DRILLING", "BOTTOM HOLE ASSEMBLY"],
+  ["DRILLING", "CASING"],
+  ["DRILLING", "CEMENT"],
+  ["DRILLING", "DAILY DRILLING REPORT"],
+  ["DRILLING", "DIRECTIONAL SURVEY"],
+  ["DRILLING", "DRILLING FLUIDS"],
+  ["DRILLING", "FINAL WELL REPORT"],
+  ["DRILLING", "GENERAL REPORT"],
+  ["DRILLING", "PLANNING / ANALYSIS"],
+  ["DRILLING", "POSITIONAL LOG"],
+  ["DRILLING", "WELL ABANDONMENT REPORT"],
+  ["DRILLING", "WELL HEADER"],
+  ["DRILLING", "WELLBORE SCHEMATIC"],
+  ["FIELD", "FIELD"],
+  ["FIELD", "FIELD WITH GEOMETRY"],
+  ["FIELD", "MICROSEISMIC"],
+  ["FIELD", "RAW FIELD"],
+  ["FIELD", "TEST"],
+  ["FINANCIAL", "ENVIRONMENTAL"],
+  ["FINANCIAL", "SUPPORT"],
+  ["FORMATION EVALUATION", "CORE ANALYSIS"],
+  ["FORMATION EVALUATION", "CORE PHOTOS"],
+  ["FORMATION EVALUATION", "CORE REPORT"],
+  ["FORMATION EVALUATION", "CROSS SECTION"],
+  ["FORMATION EVALUATION", "DRILL STEM TEST"],
+  ["FORMATION EVALUATION", "FLUID ANALYSIS"],
+  ["FORMATION EVALUATION", "FORMATION TOPS"],
+  ["FORMATION EVALUATION", "GAS ANALYSIS"],
+  ["FORMATION EVALUATION", "GEOCHEMICAL ANALYSIS"],
+  ["FORMATION EVALUATION", "GEOLOGIC REPORT"],
+  ["FORMATION EVALUATION", "PALEO"],
+  ["FORMATION EVALUATION", "PETROPHYSICAL ANALYSIS"],
+  ["FORMATION EVALUATION", "PRESSURE TEST"],
+  ["FORMATION EVALUATION", "REPORT"],
+  ["FORMATION EVALUATION", "SECTION-COLUMN"],
+  ["FORMATION EVALUATION", "SYNTHETICS"],
+  ["FORMATION EVALUATION", "WATER ANALYSIS"],
+  ["FORMATION EVALUATION", "WELL TEST"],
+  ["GATHERS", "CAG GATHERS"],
+  ["GATHERS", "CDP GATHERS"],
+  ["GATHERS", "CIP GATHERS"],
+  ["GATHERS", "CMP GATHERS"],
+  ["GATHERS", "COF GATHERS"],
+  ["GATHERS", "CRP GATHERS"],
+  ["GATHERS", "DEMULTIPLE GATHERS"],
+  ["GATHERS", "MIG GATHERS"],
+  ["GATHERS", "PSDM GATHERS"],
+  ["GATHERS", "PSTM GATHERS"],
+  ["GATHERS", "RECEIVER GATHERS"],
+  ["GATHERS", "SHOT GATHERS"],
+  ["GEOHAZARD SURVEY", "REPORT"],
+  ["GRAV-MAG", "GRAV-MAG PROCESSED"],
+  ["GRAV-MAG", "GRAV-MAG RAW"],
+  ["GRAV-MAG", "GRAVITY PROCESSED"],
+  ["GRAV-MAG", "GRAVITY RAW"],
+  ["GRAV-MAG", "GRAVITY SUPPORT"],
+  ["GRAV-MAG", "MAGNETIC PROCESSED"],
+  ["GRAV-MAG", "MAGNETIC RAW"],
+  ["GRAV-MAG", "MAGNETIC SUPPORT"],
+  ["HES", "SAFETY"],
+  ["INTERPRETATION PROJECT", "FIELD/RESERVOIR REPORT"],
+  ["INTERPRETATION PROJECT", "MONTAGE"],
+  ["INTERPRETATION PROJECT", "REGION/BASIN REPORT"],
+  ["LAND/LEGAL", "LAND"],
+  ["LAND/LEGAL", "LEGAL"],
+  ["MAP", "FOLD"],
+  ["MAP", "IMAGE"],
+  ["MAP", "LAND"],
+  ["MAP", "LOCATION"],
+  ["MAP", "SP/BIN CENTER"],
+  ["MAP", "STRUCTURE"],
+  ["MAP", "TOPO"],
+  ["MAP", "WELL PLAT"],
+  ["MICROSEISMIC", "ARRAYS"],
+  ["MICROSEISMIC", "EVENTS"],
+  ["MICROSEISMIC", "FIELD"],
+  ["MICROSEISMIC", "GENERAL"],
+  ["MICROSEISMIC", "LOG"],
+  ["MICROSEISMIC", "MAPS"],
+  ["MICROSEISMIC", "PROCESSED"],
+  ["MICROSEISMIC", "REPORTS"],
+  ["MICROSEISMIC", "SOFTWARE"],
+  ["MICROSEISMIC", "SOFTWARE OUTPUTS"],
+  ["MICROSEISMIC", "SUPPORT"],
+  ["NAVIGATION", "LIDAR"],
+  ["NAVIGATION", "BIN CENTRE"],
+  ["NAVIGATION", "PROCESSED"],
+  ["NAVIGATION", "RAW"],
+  ["NAVIGATION", "SHAPE FILE"],
+  ["NAVIGATION", "SHAPEFILE"],
+  ["NAVIGATION", "XYZ"],
+  ["INTERPRETATION PROJECT", "DATA PACKAGE"],
+  ["PROCESSED", "ATTRIBUTE PROCESSING"],
+  ["PROCESSED", "AVO"],
+  ["PROCESSED", "GATHER"],
+  ["PROCESSED", "GATHERS"],
+  ["PROCESSED", "MIGRATION"],
+  ["PROCESSED", "PRE-STACK"],
+  ["PROCESSED", "PRE-STACK DEPTH MIGRATION"],
+  ["PROCESSED", "PRE-STACK TIME MIGRATION"],
+  ["PROCESSED", "PROJECT BACKUP"],
+  ["PROCESSED", "PSDM"],
+  ["PROCESSED", "SECTION"],
+  ["PROCESSED", "STACK"],
+  ["PROCESSED", "UNKNOWN"],
+  ["PRODUCTION/OPERATIONS", "PROCEDURE"],
+  ["PRODUCTION/OPERATIONS", "PRODUCTION REPORT"],
+  ["PRODUCTION/OPERATIONS", "PRODUCTION SCHEMATIC"],
+  ["PRODUCTION/OPERATIONS", "PRODUCTION TEST"],
+  ["PRODUCTION/OPERATIONS", "REPORT"],
+  ["PRODUCTION/OPERATIONS", "WELL ANALYSIS"],
+  ["RAW FIELD", "FIELD"],
+  ["REGULATORY", "APPLICATION"],
+  ["REGULATORY", "FILING"],
+  ["REGULATORY", "NOTICE"],
+  ["REGULATORY", "PERMIT"],
+  ["SUPPORT", "ACQUISITION"],
+  ["SUPPORT", "ACQUISITION REPORT"],
+  ["SUPPORT", "CHAIN"],
+  ["SUPPORT", "DRILLER"],
+  ["SUPPORT", "EBCDIC HEADER"],
+  ["SUPPORT", "FILE LISTING"],
+  ["SUPPORT", "GENERAL"],
+  ["SUPPORT", "HAZARD"],
+  ["SUPPORT", "HORIZON"],
+  ["SUPPORT", "INTERPRETATION REPORT/SUPPORT"],
+  ["SUPPORT", "LOAD SHEET"],
+  ["SUPPORT", "MAP"],
+  ["SUPPORT", "MINERAL NO PERMIT"],
+  ["SUPPORT", "MONITORS"],
+  ["SUPPORT", "NAVIGATION LOG"],
+  ["SUPPORT", "NAVIGATION REPORT/SUPPORT"],
+  ["SUPPORT", "OBSERVERS"],
+  ["SUPPORT", "PLOT/CHARTS"],
+  ["SUPPORT", "PROCESSING FILE"],
+  ["SUPPORT", "PROCESSING REPORT"],
+  ["SUPPORT", "REPORT"],
+  ["SUPPORT", "SEISMIC INTERPRETATION REPORT"],
+  ["SUPPORT", "SHOOTER"],
+  ["SUPPORT", "SURVEY"],
+  ["SUPPORT", "TAPE LABEL"],
+  ["SUPPORT", "TAPE LOGS"],
+  ["SUPPORT", "TRANSMITTAL"],
+  ["SUPPORT", "VELOCITY"],
+  ["VELOCITY", "PROCESSED"],
+  ["VELOCITY", "RMS"],
+  ["VELOCITY", "VELOCITY SURVEY"],
+  ["VSP", "CHECKSHOT"],
+  ["VSP", "PROCESSED"],
+  ["VSP", "RAW"],
+  ["VSP", "REPORT"],
+  ["WELL COMPLETION", "CEMENT"],
+  ["WELL COMPLETION", "OPERATIONS"],
+  ["WELL COMPLETION", "STIMULATION"],
+  ["WELL DEVELOPMENT", "CORE"],
+  ["WELL DEVELOPMENT", "FLUIDS"],
+  ["WELL DEVELOPMENT", "OPEN HOLE LOG"],
+  ["WELL DEVELOPMENT", "TESTING"],
+  ["WELL DRILLING", "CEMENT"],
+  ["WELL DRILLING", "DAILY REPORT"],
+  ["WELL DRILLING", "MUD"],
+  ["WELL DRILLING", "OPERATIONS"],
+  ["WELL DRILLING", "PLANNING/ANALYSIS"],
+  ["WELL INFO", "ENVIRONMENTAL"],
+  ["WELL INFO", "MISC"],
+  ["WELL INFO", "REPORT"],
+  ["WELL INFO", "SAFETY"],
+  ["WELL LOG", "ANNOTATED"],
+  ["WELL LOG", "BOREHOLE IMAGE"],
+  ["WELL LOG", "CALIBRATION FILE"],
+  ["WELL LOG", "CASED HOLE"],
+  ["WELL LOG", "CASED HOLE LOG"],
+  ["WELL LOG", "COMPOSITE"],
+  ["WELL LOG", "FIELD"],
+  ["WELL LOG", "FINAL"],
+  ["WELL LOG", "FORMATION EVALUATION"],
+  ["WELL LOG", "LWD/MWD"],
+  ["WELL LOG", "MUD LOG"],
+  ["WELL LOG", "OPEN HOLE"],
+  ["WELL LOG", "OPEN HOLE LOG"],
+  ["WELL LOG", "PROPRIETARY"],
+  ["WELL LOG", "VELOCITY"],
+  ["WELL LOG", "REPORT"],
+  ["WELL LOG", "SUPPORT"],
+  ["WELL LOG", "WIRELINE"],
+  ["WELL OPERATIONS", "ARTIFICIAL LIFT"],
+  ["WELL OPERATIONS", "DAILY REPORT"],
+  ["WELL OPERATIONS", "OPERATIONS"],
+  ["WELL OPERATIONS", "REPORT"],
+  ["WELL OPERATIONS", "STIMULATION"],
+  ["WELL OPERATIONS", "WELLBORE SCHEMATIC"],
+  ["DRILLING", "WELL HISTORY"],
+  ["GRAV-MAG", "GRAV-MAG SUPPORT"],
+  ["GRAV-MAG", "REPORT"],
+  ["INTERPRETATION PROJECT", "BID ROUND"],
+  ["MAP", "GEOLOGICAL-GEOPHYSICAL"],
+  ["MAP", "GRAV-MAG"],
+  ["MAP", "ISOPACH"],
+  ["PROCESSED", "ATTRIBUTE DATA"],
+  ["SUPPORT", "ACQUISITION REPORT/SUPPORT"],
+  ["SUPPORT", "GEOHAZARD REPORT/SUPPORT"],
+  ["SUPPORT", "NAVIGATION LOGS"],
+  ["SUPPORT", "OBSERVERS LOGS"],
+  ["SUPPORT", "PROCESSING"],
+  ["SUPPORT", "PROCESSING REPORT/SUPPORT"],
+  ["SUPPORT", "TRANSCRIPTION REPORT/SUPPORT"],
+  ["ADMIN", "AGREEMENT"],
+  ["ADMIN", "ARCHIVE"],
+  ["ADMIN", "ENDORSEMENT PACK"],
+  ["ADMIN", "FOREIGN LANGUAGE DOCUMENT"],
+  ["COMPLETION/WORKOVER", "ARTIFICIAL LIFT REPAIR"],
+  ["COMPLETION/WORKOVER", "CASING REPAIR"],
+  ["COMPLETION/WORKOVER", "DOWNHOLE TOOLS & EQUIPMENT"],
+  ["COMPLETION/WORKOVER", "OPERATIONS"],
+  ["COMPLETION/WORKOVER", "PERFORATION REPORT"],
+  ["COMPLETION/WORKOVER", "PERMANENT ABANDONMENT"],
+  ["COMPLETION/WORKOVER", "TUBING TALLY"],
+  ["COMPLETION/WORKOVER", "WELLBORE SCHEMATIC"],
+  ["COMPLETION/WORKOVER", "WELLHEAD & TREE"],
+  ["DISTRIBUTED SENSOR NETWORK", "CEMENT BOND"],
+  ["DISTRIBUTED SENSOR NETWORK", "COMPLETIONS MONITORING"],
+  ["DISTRIBUTED SENSOR NETWORK", "INSTRUMENTATION"],
+  ["DISTRIBUTED SENSOR NETWORK", "PRODUCTION MONITORING"],
+  ["DISTRIBUTED SENSOR NETWORK", "VSP"],
+  ["DRILLING", "DIRECTIONAL/DEVIATION SURVEY"],
+  ["DRILLING", "FINAL WELL / GEOLOGICAL REPORT"],
+  ["DRILLING", "JOB EVENTS"],
+  ["DRILLING", "MUD"],
+  ["DRILLING", "OPERATIONS"],
+  ["DRILLING", "PLANNING/ANALYSIS"],
+  ["DRILLING", "PLUG BACK"],
+  ["DRILLING", "REPORT"],
+  ["DRILLING", "SURVEY"],
+  ["FIELD", "RAW FIELD REFORMAT"],
+  ["FIELD", "SECTION"],
+  ["FIELD", "STATISTICS"],
+  ["FIELD", "UNKNOWN"],
+  ["FINANCIAL", "AFE"],
+  ["FINANCIAL", "CORRESPONDENCE"],
+  ["FINANCIAL", "INVOICE"],
+  ["FINANCIAL", "REPORT"],
+  ["FORMATION EVALUATION", "BIOSTRATIGRAPHY"],
+  ["FORMATION EVALUATION", "CORE"],
+  ["FORMATION EVALUATION", "FLUIDS"],
+  ["FORMATION EVALUATION", "GEOCHEMICAL"],
+  ["FORMATION EVALUATION", "LABORATORY / SAMPLE REPORT"],
+  ["FORMATION EVALUATION", "TESTING"],
+  ["FORMATION EVALUATION", "TOPS"],
+  ["GATHERS", "COFF GATHERS"],
+  ["GATHERS", "GATHERS"],
+  ["GATHERS", "VELOCITY GATHERS"],
+  ["GEOHAZARD SURVEY", "CORE DATA"],
+  ["GEOHAZARD SURVEY", "CTD/VELOCIMETER DATA"],
+  ["GEOHAZARD SURVEY", "EBS SURVEY DATA AND REPORT"],
+  ["GEOHAZARD SURVEY", "ECHOSOUNDER BATHYMETRY"],
+  ["GEOHAZARD SURVEY", "GEOCHEMICAL"],
+  ["GEOHAZARD SURVEY", "GEOHAZARD MAP"],
+  ["GEOHAZARD SURVEY", "GEOHAZARD REPORT"],
+  ["GEOHAZARD SURVEY", "GEOLOGIC CORE DATA AND REPORT"],
+  ["GEOHAZARD SURVEY", "GEOPHYSICAL REPORT"],
+  ["GEOHAZARD SURVEY", "GEOTECHNICAL"],
+  ["GEOHAZARD SURVEY", "GEOTECHNICAL DATA"],
+  ["GEOHAZARD SURVEY", "GEOTECHNICAL REPORT"],
+  ["GEOHAZARD SURVEY", "GIS DATABASES"],
+  ["GEOHAZARD SURVEY", "HI RES SEISMIC"],
+  ["GEOHAZARD SURVEY", "KINGDOM PROJECTS"],
+  ["GEOHAZARD SURVEY", "LIDAR SURVEY DATA"],
+  ["GEOHAZARD SURVEY", "MAGNETOMETER"],
+  ["GEOHAZARD SURVEY", "MAP"],
+  ["GEOHAZARD SURVEY", "MULTIELEMENT PLOTS"],
+  ["GEOHAZARD SURVEY", "NAVIGATION"],
+  ["GEOHAZARD SURVEY", "SEISMIC REFRACTION"],
+  ["GEOHAZARD SURVEY", "SIDE-SCAN SONAR"],
+  ["GEOHAZARD SURVEY", "SUB-BOTTOM PROFILER"],
+  ["GEOHAZARD SURVEY", "TOPOGRAPHIC SURVEY DATA"],
+  ["GEOHAZARD SURVEY", "ULTRA HI RES SEISMIC"],
+  ["GEOHAZARD SURVEY", "WEB-BASED MAPS"],
+  ["GRAV-MAG", "GRAV-MAG MAP"],
+  ["GRAV-MAG", "GRAV-MAG REPORT"],
+  ["GRAV-MAG", "GRAV_MAG REPORT"],
+  ["GRAV-MAG", "MULTIELEMENT PLOTS"],
+  ["HES", "REPORT"],
+  ["INTERPRETATION PROJECT", "BIOSTRATIGRAPHY"],
+  ["INTERPRETATION PROJECT", "CROSS SECTION"],
+  ["INTERPRETATION PROJECT", "FARM-IN/FARM-OUT"],
+  ["INTERPRETATION PROJECT", "FIELD"],
+  ["INTERPRETATION PROJECT", "FIELD WITH GEOMETRY"],
+  ["INTERPRETATION PROJECT", "MAP"],
+  ["INTERPRETATION PROJECT", "MICROSEISMIC"],
+  ["INTERPRETATION PROJECT", "PHOTO"],
+  ["INTERPRETATION PROJECT", "PLOT/CHART"],
+  ["INTERPRETATION PROJECT", "RAW FIELD"],
+  ["INTERPRETATION PROJECT", "SECTION-COLUMN"],
+  ["INTERPRETATION PROJECT", "SEISMIC INTERPRETATION"],
+  ["INTERPRETATION PROJECT", "SYNTHETIC"],
+  ["INTERPRETATION PROJECT", "TEST"],
+  ["INTERPRETATION PROJECT", "TOPS/PICKS/HORIZONS"],
+  ["MAP", "INTERPRETATION"],
+  ["MAP", "SEISMIC BASE"],
+  ["MICROSEISMIC", "RAW"],
+  ["MIGRATION", "FIELD"],
+  ["MIGRATION", "GATHERS"],
+  ["MIGRATION", "IMAGE"],
+  ["MIGRATION", "MICROSEISMIC"],
+  ["MIGRATION", "MISC"],
+  ["MIGRATION", "SECTION"],
+  ["MIGRATION", "STACK"],
+  ["NAVIGATION", "REPORT"],
+  ["PROCESSED", "REFRACTION"],
+  ["PROCESSED", "SEISMIC SECTION"],
+  ["PROCESSED", "SYNTHETIC"],
+  ["PRODUCTION/OPERATIONS", "ARTIFICIAL LIFT"],
+  ["PRODUCTION/OPERATIONS", "FACILITIES"],
+  ["PRODUCTION/OPERATIONS", "FIELD"],
+  ["PRODUCTION/OPERATIONS", "FIELD/RESERVOIR REPORT"],
+  ["PRODUCTION/OPERATIONS", "OPERATIONS"],
+  ["PRODUCTION/OPERATIONS", "REGION/BASIN REPORT"],
+  ["PRODUCTION/OPERATIONS", "REPORTS"],
+  ["PRODUCTION/OPERATIONS", "STIMULATION"],
+  ["PRODUCTION/OPERATIONS", "WELL TEST"],
+  ["PRODUCTION/OPERATIONS", "WELLBORE SCHEMATIC"],
+  ["REGULATORY", "AGENCY"],
+  ["REGULATORY", "CASING PRESSURE WAIVERS"],
+  ["REGULATORY", "INTEGRITY TESTING"],
+  ["REGULATORY", "REPORT"],
+  ["REGULATORY", "WELL PLAT"],
+  ["SUPPORT", "DEPTH SLICE"],
+  ["SUPPORT", "GEOFRAME BACKUP"],
+  ["SUPPORT", "NAVIGATION REPORT"],
+  ["SUPPORT", "OBSERVERS LOGS/REPORT"],
+  ["SUPPORT", "PARS BACKUP"],
+  ["SUPPORT", "PETREL"],
+  ["SUPPORT", "PROJECT BACKUP"],
+  ["SUPPORT", "REFRACTION"],
+  ["SUPPORT", "REPORTS"],
+  ["SUPPORT", "SECTION"],
+  ["SUPPORT", "SEISMIC ACQUISITION QC CHART"],
+  ["SUPPORT", "SEISMIC ACQUISITION QC REPORT"],
+  ["SUPPORT", "SEISMIC ACQUISITION REPORT"],
+  ["SUPPORT", "SEISMIC NAVIGATION QC REPORT"],
+  ["SUPPORT", "SEISMIC NAVIGATION REPORT"],
+  ["SUPPORT", "SEISMIC PROCESSING QC CHART"],
+  ["SUPPORT", "SEISMIC PROCESSING QC REPORT"],
+  ["SUPPORT", "SEISMIC PROCESSING REPORT"],
+  ["SUPPORT", "STATICS"],
+  ["SUPPORT", "SYNTHETIC"],
+  ["SUPPORT", "TIME SLICE"],
+  ["SUPPORT", "VSP ACQUISITION REPORT"],
+  ["SUPPORT", "VSP INTERPRETATION REPORT"],
+  ["SUPPORT", "VSP NAVIGATION QC REPORT"],
+  ["SUPPORT", "VSP NAVIGATION REPORT"],
+  ["SUPPORT", "VSP OBSERVERS LOGS / REPORT"],
+  ["SUPPORT", "VSP PROCESSING QC REPORT"],
+  ["SUPPORT", "VSP PROCESSING REPORT"],
+  ["VELOCITY", "CHECKSHOT"],
+  ["VELOCITY", "PROCESSED VELOCITY"],
+  ["VELOCITY", "VELOCITY-PROCESSING"],
+  ["VSP", "DEVIATION SURVEY"],
+  ["WELL LOG", "BIOSTRATIGRAPHIC"],
+  ["WELL LOG", "CORRELATION"],
+  ["WELL LOG", "DEPTH REGISTRATION FILE"],
+  ["WELL LOG", "DIGITAL"],
+  ["WELL LOG", "DIGITAL - ENHANCED (PARSED)"],
+  ["WELL LOG", "DRA CALIBRATION FILE (GEOGRAPHIC)"],
+  ["WELL LOG", "EDITED"],
+  ["WELL LOG", "GEO_APPS"],
+  ["WELL LOG", "LIC CALIBRATION FILE (PETRA)"],
+  ["WELL LOG", "MUD/SAMPLE LOG"],
+  ["WELL LOG", "PETRO_APPS"],
+  ["WELL LOG", "PRESSURE"],
+  ["WELL LOG", "PRODUCTION"],
+  ["WELL LOG", "RASTER"],
+  ["WELL LOG", "RAW"],
+  ["WELL LOG", "SIF CALIBRATION FILE (TGS)"],
+  ["WELL LOG", "SYNTHETIC"],
+  ["WELL LOG", "UDB"],
+  ["WELL LOG", "XML CALIBRATION FILE (IHSe)"],
+  ["VSP", "SYNTHETIC"],
+  ["GRAV-MAG", "GRAVITY DATA - PROCESSED"],
+  ["MIGRATION", "GATHER"],
+  ["FIELD", "SEGD FIELD DATA"],
+  ["FIELD", "SEGY FIELD DATA"],
+  ["FIELD", "RAW NODE"],
+  ["FIELD", "NAV MERGE"],
+  ["INTERPRETATION PROJECT", "INTERPRETATION PROJECT"],
+  ["INTERPRETATION PROJECT", "PETREL"],
+  ["INTERPRETATION PROJECT", "SMT"],
+  ["WELL LOG", "XML CALIBRATION FILE  (IHSE)"],
+  ["WELL LOG", "DRA CALIBRATION FILE (GEOGRAPHIX)"],
+  ["WELL LOG", "VELOCITY LOG"],
+  ["FORMATION EVALUATION", "VSP"],
+  ["FORMATION EVALUATION", "CHECKSHOT SURVEY"],
+  ["FORMATION EVALUATION", "DIGITAL"],
+  ["FORMATION EVALUATION", "DIGITAL - ENHANCED (PARSED)"],
+  ["FORMATION EVALUATION", "RASTER"],
+  ["FORMATION EVALUATION", "SIF CALIBRATION FILE (TGS)"],
+  ["FORMATION EVALUATION", "XML CALIBRATION FILE (IHSE)"],
+  ["FORMATION EVALUATION", "LIC CALIBRATION FILE (PETRA)"],
+  ["FORMATION EVALUATION", "DRA CALIBRATION FILE (GEOGRAPHIX)"],
+  ["FORMATION EVALUATION", "MUD LOG"],
+  ["FORMATION EVALUATION", "SUPPORT"],
+  ["FORMATION EVALUATION", "SAMPLE"],
+  ["FORMATION EVALUATION", "PETROPHYSICAL"],
+  ["FORMATION EVALUATION", "SIF-CALIBRATION"],
+  ["FORMATION EVALUATION", "LIC-CALIBRATION"],
+  ["FORMATION EVALUATION", "LABORATORY-SAMPLE REPORT"],
+  ["FORMATION EVALUATION", "ORGANIC-CARBON-ANALYSIS"],
+  ["FORMATION EVALUATION", "FIBER DATA"],
+  ["DRILLING", "DRILL STEM TEST"],
+  ["PRODUCTION/OPERATIONS", "ENGINEERING"],
+  ["PROCESSED", "FWI"],
+  ["PROCESSED", "GATHERS - SHOT CHANNEL"],
+  ["PROCESSED", "GATHERS - 2D CDP OFFSET"],
+  ["PROCESSED", "GATHERS - 3D CDP ANGLE"],
+  ["PROCESSED", "GATHERS - 3D CDP OFFSET"],
+  ["PROCESSED", "STACK - ANGLE"],
+  ["PROCESSED", "STACK - OFFSET"],
+  ["PROCESSED", "INVERSION"],
+  ["PROCESSED", "COHERENCE-CUBE"],
+  ["PROCESSED", "PRE-STACK MIGRATION"],
+  ["PROCESSED", "PSDM STACKS"],
+  ["PROCESSED", "PSTM STACKS"],
+  ["PROCESSED", "CMS"],
+  ["PROCESSED", "PSTM"],
+  ["PROCESSED", "SHOT GATHERS"],
+  ["GATHERS", "INTERPOLATED GATHERS"],
+  ["GATHERS", "AVO GATHERS"],
+  ["GATHERS", "STRUCTURAL GATHERS"],
+  ["GATHERS", "PREPROCESSED"],
+  ["GATHERS", "MIGRATED"],
+  ["GATHERS", "CDG GATHERS"],
+  ["GATHERS", "CMG GATHERS"],
+  ["GATHERS", "COG GATHERS"],
+  ["GATHERS", "CRG GATHERS"],
+  ["GATHERS", "CSG GATHERS"],
+  ["GATHERS", "PRDM GATHERS"],
+  ["GEOHAZARD SURVEY", "BATHYMETRY"],
+  ["GEOHAZARD SURVEY", "HIRES SEISMIC"],
+  ["GEOHAZARD SURVEY", "MAGNETIC"],
+  ["GEOHAZARD SURVEY", "MAPS"],
+  ["GEOHAZARD SURVEY", "REPORTS"],
+  ["GEOHAZARD SURVEY", "SUPPORT"],
+  ["GEOHAZARD SURVEY", "SIDE-SCAN SONAR IMAGE"],
+  ["GEOHAZARD SURVEY", "VELOCITY PROFILE"],
+  ["GEOHAZARD SURVEY", "GRID"],
+  ["GEOHAZARD SURVEY", "MUTLI-BEAM ECHO SOUNDER"],
+  ["GEOHAZARD SURVEY", "TRACKPLOT"],
+  ["GEOHAZARD SURVEY", "CONTOURS"],
+  ["GEOHAZARD SURVEY", "AUV"],
+  ["GEOHAZARD SURVEY", "SUB-BOTTOM SEISMIC"],
+  ["DISTRIBUTED SENSOR NETWORK", "RAW FIELD DATA"],
+  ["SUPPORT", "UPHOLE"],
+  ["SUPPORT", "INTERPRETATION PROJECT"],
+  ["SUPPORT", "MICROSEISMIC REPORTS/SUPPORT"],
+  ["SUPPORT", "PROCESSING SUPPORT DOCUMENTS"],
+  ["SUPPORT", "PROCESSING SUPPORT"],
+  ["SUPPORT", "INTERPRETATION SUPPORT"],
+  ["SUPPORT", "ACQUISITION SUPPORT DOCUMENTS"],
+  ["SUPPORT", "ACQUISITION SUPPORT"],
+  ["SUPPORT", "HORIZONS"],
+  ["SUPPORT", "SHALLOW HAZARD"],
+  ["SUPPORT", "TIMESLICE"],
+  ["SUPPORT", "ACQUISITION FILE"],
+  ["ADMIN", "CONTRACTS"],
+  ["ADMIN", "UNKNOWN"],
+  ["ADMIN", "UNKNOWN FROM TRANGO MIGRATION"],
+  ["NAVIGATION", "BIN-GRID COORDINATES"],
+  ["NAVIGATION", "LAND POSITIONING DATA"],
+  ["NAVIGATION", "MARINE POSITIONING DATA - PROCESSED"],
+  ["NAVIGATION", "MARINE POSITIONING DATA - RAW"],
+  ["NAVIGATION", "POLYGON"],
+  ["NAVIGATION", "UNKNOWN"],
+  ["NAVIGATION", "SPS"],
+  ["GRAV-MAG", "SUPPORT"],
+  ["GRAV-MAG", "MAP"],
+  ["GRAV-MAG", "GRAVITY DATA - RAW"],
+  ["GRAV-MAG", "GRAVITY MAGNETIC DATA - PROCESSED"],
+  ["GRAV-MAG", "GRAVITY MAGNETIC DATA - RAW"],
+  ["GRAV-MAG", "MAGNETIC DATA - PROCESSED"],
+  ["GRAV-MAG", "ACQUISITION REPORT"],
+  ["GRAV-MAG", "PROCESSING REPORT"],
+  ["GRAV-MAG", "NAVIGATION"],
+  ["VELOCITY", "AVERAGE"],
+  ["VELOCITY", "AZIMUTH"],
+  ["VELOCITY", "DELTA"],
+  ["VELOCITY", "EPSILON"],
+  ["VELOCITY", "ETA"],
+  ["VELOCITY", "INSTANTANEOUS"],
+  ["VELOCITY", "INTERVAL"],
+  ["VELOCITY", "UNKNOWN"],
+  ["VELOCITY", "DIP"],
+  ["VELOCITY", "STACKING"],
+  ["VELOCITY", "ANISOTROPIC VELOCITY ANALYSIS"],
+  ["VELOCITY", "DMO"],
+  ["VELOCITY", "HDVA"],
+  ["VELOCITY", "LOW FREQUENCY MODEL"],
+  ["VELOCITY", "MIGRATION"],
+  ["VELOCITY", "PSDM"],
+  ["VELOCITY", "PSTM"],
+  ["VELOCITY", "VA1"],
+  ["VELOCITY", "VA2"],
+  ["VELOCITY", "VA3"],
+  ["VELOCITY", "RAW"],
+  ["VSP", "FIELD"]
+];
+
+
+/* ─── 2. DIGITAL FORMATS ────────────────────────────────────────────────────
+   Shared by both engines. Add: "NEWFORMAT",  Remove: delete the entry.
+   Any value starting with UKOOA is accepted automatically — no need to list variants.
+   Use UPPERCASE. Keep commas between entries. */
+const DIGITAL_FORMAT_LIST = [
+  "SEG-Y", "SEGY", "SEG Y", "SEG-D", "SEGD", "ASCII", "SEGA", "SEGB",
+  "SEGC", "ASCII-DOS", "SEGP1", "ZIP", "PDF", "TIF", "JPEG", "XLS",
+  "DOC", "EXCEL", "LAS", "LIS", "DLIS", "CGM", "EMF", "UNKNOWN",
+  "DOCX", "UKOOA", "P190", "SUMIT", "CHV30", "TAR", "TXT", "INDEX ONLY",
+  "TEXT", "TIFF", "CHESS", "UKOOA P1/90", "EXCELX", "ESSO V2", "UKOOA P2/91", "JPG",
+  "PDS", "GZIP", "PPT", "WORD", "CSV", "BMP", "PNG", "GIF",
+  "VER", "RV-0001", "LWD", "MWD", "TNTG", "RODE", "PETTY", "META",
+  "TAP", "WGC4", "WGC2", "XTF", "EXE", "EMR", "3DV", "7Z",
+  "A5", "AMOCO", "AUX", "BCK", "BDMX", "CGG", "CONI", "CPG",
+  "DARTS", "DAT", "DBF", "DC", "DFS3", "DGI", "DIO", "DISCO",
+  "DLS", "DWG", "DSZIP", "EML", "XLSX", "FIX", "FMA", "GEOCORIV",
+  "2DS", "GRD", "GZ", "IBM", "JGW", "KML", "LEACH", "LIC",
+  "LISTIF", "LZW", "MAT", "MDB", "MDR", "MP4", "MSG", "MPP",
+  "MTX", "MXD", "UK", "OMEGA", "OVR", "P111", "P184", "P191",
+  "P294", "PBMGZ", "ZGY", "PHI", "PLT", "PS", "PRJ", "PROMAX",
+  "PST", "QIX", "RAR", "RPS", "RRD", "RTF", "SAF", "SBN",
+  "SBX", "SD", "SDS", "SEG2", "SEGB_TAR", "SEGD_TAR", "SEGX", "SEGY-ZERO",
+  "SGY", "IDX", "SHP", "SHX", "SIPMAP", "SIS", "SPS", "TEMPUSSEGY",
+  "TFW", "UKOOA_P1/76", "UKP184", "UKP190", "UKOOA_P2/84", "P286", "P291", "UKP294",
+  "UKP611", "UKOOA_P6/98", "VFI", "VSD", "WDS", "WGC1", "WGC7", "WPS",
+  "XML", "XPS", "ASC", "WORK9", "MGLX", "DIG", "SU", "TEX7",
+  "EMR7", "RED7", "DEBE", "I167", "9-6", "WGC3", "MISC", "BIAS7",
+  "CFS", "I247", "SSC7", "SEISC7", "MCGG", "WGC8", "DIG5", "PDR70S",
+  "CDC7", "RAW", "IMG", "P211", "SSCA", "SDR", "HLF", "PBM",
+  "KMZ", "PSM", "WK4", "ML6", "ODF", "PDP", "PGL", "XFR",
+  "HDF5", "TANGO", "P194", "P178", "ESSOV2", "V2", "TEXACO", "CPIO",
+  "PHX", "TDMS", "CFG", "DPK", "BIT", "JPX", "CHK", "DOC; DOCX",
+  "SEGY_TAR", "DFS4", "DFSV", "PMVL", "TI10K", "WISDOM", "TIAC", "TIPEX",
+  "TI9K", "MPEG", "SFAM", "DSS", "TAR-SEGD", "TPR", "OIL", "SAV",
+  ".WK1", "H5", "PY", "GDF", "PCX", "LOG", "PHASE II", "XYZ", "WESTC4",
+  "5-FLOPPY", "7ZIP", "ACCESS", "ADOBE PIXMAP FILE", "ARC", "ASCII/CD-R", "ASCII/SEGP1", "ASCII/SEGYP1", "ASCII/SEP1", "ASCIII/SEGP1",
+  "AVI", "BIRD", "CDC", "CLA", "CODA", "CPI FORMAT", "DATABASE", "DFS IV", "DGI IEEE", "DIGIAL",
+  "DIGITAL", "DRAWING", "DXF", "EBCDIC", "ECHO", "EMRO", "EPR", "ERP", "EXXONSEGY", "FIELD",
+  "FIELD TEST", "FLD", "GD187", "GD197", "GD367", "GEO", "GEOC", "GEOCM7", "GEOCOM", "GEOGRAPHIX",
+  "GEOIV", "GEOSHARE", "GEOTIF", "GEOX", "GFA", "GMT", "GSY", "HTML", "I126", "I127",
+  "I16", "I187", "I24", "IBM32", "IBMTRS", "IEEE", "JSON", "KE5", "LANDMARK 2D", "LDF",
+  "LIS-TIF", "LLZ", "LLZ FORMAT", "LST", "MATLAB", "MON", "MSP", "N / A", "NAV", "NDS",
+  "NLGX", "OB NOTES", "ODIS", "OUD", "OUTLOOK", "PAPAER", "PAPER", "PDD", "PDF'S", "PETRAL",
+  "PETREL", "PFD", "PHOENIXI", "PLOT", "PLOTT FILE", "PLY", "PORTABLE BITMAP IMAGE", "POSTSCRIPT", "PPS", "PROGRAM",
+  "PSL-DOS", "RCV", "RIM CENTER", "RIN", "RM1", "RM2", "RM3", "RSR", "SDR3", "SECTION",
+  "SED-D", "SEG", "SEG P1", "SEG-A", "SEG-B", "SEG-C", "SEG-D 8058", "SEG-G", "SEG-P", "SEG-X",
+  "SEGE", "SEGP", "SEGP-1", "SEGP1 ASCII", "SEGP2", "SEGU", "SEGY DATA", "SEGYFP", "SEGYFT", "SEISUP",
+  "SEISX", "SEISX_IDX", "SEP1", "SER3", "SERCEL", "SFB", "SGG", "SGX", "SGY-Y", "SHAPEFILE",
+  "SHOTPINT MAP", "SHT", "SMOL", "SOM", "SP1", "SPG", "SSD", "STANDARD", "STDI", "STS",
+  "SUM", "SURVEY", "SURVOPT", "TAR LOG", "TELEDYNE", "TEMPUS SEGY", "TIF / PDF", "TIMESLICE", "UKOOA 1978", "UKOOA P1",
+  "UKOOA P1/11", "UKOOA P1/78", "UKOOA P1/84", "UKOOA P190", "UKOOA P2/11", "UKOOA P2/86", "UKOOA P2/94", "UKOOA P6/11", "UNK", "VIBROSEIS",
+  "VIDEO FILES", "WAV AUDIO FILE", "WCL", "WINDOWS MEDIA VIDEO", "XTL", "XYZ FORMAT"
+];
+
+
+/* ─── 3. UNKNOWN FORMAT PASS-PHRASES ────────────────────────────────────────
+   If Digital Format = UNKNOWN and Item Remarks or Comments contains one of
+   these phrases, the item passes with no flag. Add in UPPERCASE, single quotes. */
+const UNKNOWN_FORMAT_PHRASES = [
+  'SSCAN: FORMAT NOT DETERMINED',
+  'NO REFORMAT',
+  'NONSEIS'
+];
+
+
+/* ─── 4. CATEGORIES EXEMPT FROM DUPLICATE DETECTION ────────────────────────
+   Items in these categories are never flagged for duplicate filenames or titles.
+   Navigation data reuses filenames by design. Add names in UPPERCASE. */
+const DUPLICATE_EXEMPT_CATEGORIES = new Set([
+  'NAVIGATION'
+]);
+
+/* ─── 5. ADMIN PIN ──────────────────────────────────────────────────────────
+   PIN required to access the Admin panel inside the app.
+   Change this value to update the PIN. Keep it stored securely (e.g. in your
+   documentation) — anyone who can open this file in a text editor can see it. */
+const ADMIN_PIN = '3200';
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   END OF CONFIGURATION — Do not edit below this line for routine maintenance.
+   Changes below affect QC engine logic, field mapping, and output formatting.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+
+// ── Engine aliases — both engines reference the shared lists above ────────────
+const GOVERNANCE     = GOVERNANCE_SHARED; // GenV engine uses this
+const GOVERNANCE_XOM = GOVERNANCE_SHARED; // XOM engine uses this
+
+const ALLOWED_VALUES = [["SAMPLE TYPE","TIME","TIME"],["SAMPLE TYPE","TIME DOMAIN","TIME"],["SAMPLE TYPE","DEPTH","DEPTH"],["SAMPLE TYPE","DEPTH DOMAIN","DEPTH"],["RECORD LENGTH UOM","MILLISECONDS","MILLISECONDS"],["RECORD LENGTH UOM","MS","MILLISECONDS"],["RECORD LENGTH UOM","METRES","METRES"],["RECORD LENGTH UOM","M","METRES"],["SAMPLE RATE UOM","MILLISECONDS","MILLISECONDS"],["SAMPLE RATE UOM","MS","MILLISECONDS"],["SAMPLE RATE UOM","METRES","METRES"],["SAMPLE RATE UOM","M","METRES"],["SAMPLE RATE UOM","IN","IN"],["SAMPLE RATE UOM","FT","FT"],["DIGITAL FORMAT REV","0","0"],["DIGITAL FORMAT REV","1","1.0"],["DIGITAL FORMAT REV","1.0","1.0"],["DIGITAL FORMAT REV","2","2.0"],["DIGITAL FORMAT REV","2.0","2.0"],["DIGITAL FORMAT REV","2.1","2.1"],["DIGITAL FORMAT REV","3","3.0"],["DIGITAL FORMAT REV","3.0","3.0"],["DIGITAL FORMAT REV","3.1","3.1"],["EXCEPTION CODE","DUPLICATE","DUPLICATE"],["EXCEPTION CODE","MERGED","MERGED"],["EXCEPTION CODE","NO CONTENTS","NO CONTENTS"],["EXCEPTION CODE","UNREADABLE","UNREADABLE"],["EXCEPTION CODE","OTHER","OTHER"],["EXCEPTION CODE","INDEX ONLY","INDEX ONLY"]].concat(
+  DIGITAL_FORMAT_LIST.map(f => ["DIGITAL FORMAT", f, f])
+); // [Field, Allowed_Value, Normalized_Value]
+
+
+/* ===================== Derived lookups ===================== */
+/* ===================== XOM ruleset (from KDM_XOM_Global_Data_Governance_Rules.xlsx) ===================== */
+
+const DEPRECATED_NOTES_XOM = {"ADMIN|AFE": "DO NOT USE, USE ADMIN/AGREEMENT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|CONTRACT": "DO NOT USE, USE ADMIN/AGREEMENT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|INVOICE": "DO NOT USE, USE ADMIN/ARCHIVE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|LEGAL": "DO NOT USE, USE ADMIN/ARCHIVE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|REPORT": "DO NOT USE, USE ADMIN/CORRESPONDENCE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "COMPLETION/WORKOVER|PERFORATION REPORT": "DO NOT USE, USE COMPLETION/WORKOVER/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|JOB EVENTS": "DO NOT USE, USE DRILLING/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|MUD": "DO NOT USE, USE DRILLING/DRILLING FLUIDS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|PLUG BACK": "DO NOT USE, USE DRILLING/OPERATIONS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|SURVEY": "DO NOT USE, USE DRILLING/DIRECTIONAL/DEVIATION SURVEY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FIELD|FIELD": "DO NOT USE, USE FIELD/RAW FIELD OR FIELD/FIELD WITH GEOMETRY INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|MICROSEISMIC": "DO NOT USE, USE MICROSEISMIC/FIELD INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|SECTION": "DO NOT USE, DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|STATISTICS": "DO NOT USE, DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|UNKNOWN": "DO NOT USE, DELETE THIS SUBCAT (ONCE EMPTY)", "FINANCIAL|AFE": "DO NOT USE, USE ADMIN/AGREEMENT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FINANCIAL|CORRESPONDENCE": "DO NOT USE, USE ADMIN/CORRESPONDENCE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FINANCIAL|INVOICE": "DO NOT USE, USE ADMIN/ARCHIVE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FINANCIAL|REPORT": "DO NOT USE, USE ADMIN/CORRESPONDENCE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FORMATION EVALUATION|BIOSTRATIGRAPHY": "DO NOT USE, USE INTERPRETATION PROJECT/BIOSTRATIGRAPHY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FORMATION EVALUATION|TOPS": "DO NOT USE, USE INTERPRETATION PROJECT/TOPS/PICKS/HORIZONS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "GATHERS|CMP GATHERS": "DO NOT USE, USE GATHERS/CDP GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|CRP GATHERS": "DO NOT USE, USE GATHERS/RECEIVER GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|GATHERS": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|PSDM GATHERS": "DO NOT USE, USE GATHERS/MIG GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|PSTM GATHERS": "DO NOT USE, USE GATHERS/MIG GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|VELOCITY GATHERS": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "GEOHAZARD SURVEY|EBS SURVEY DATA AND REPORT": "DO NOT USE, USE GEOHAZARD SURVEY/REPORT, THIS SUBCAT HAS BEEN INACTIVATED", "GEOHAZARD SURVEY|GEOLOGIC CORE DATA AND REPORT": "DO NOT USE, USE GEOHAZARD SURVEY/CORE DATA, THIS SUBCAT HAS BEEN INACTIVATED", "GEOHAZARD SURVEY|GEOPHYSICAL REPORT": "DO NOT USE, USE GEOHAZARD SURVEY/REPORT, THIS SUBCAT HAS BEEN INACTIVATED", "GEOHAZARD SURVEY|ULTRA HI RES SEISMIC": "DO NOT USE, USE GEOHAZARD SURVEY/HI RES SEISMIC INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)4", "GEOHAZARD SURVEY|WEB-BASED MAPS": "DO NOT USE, USE GEOHAZARD SURVEY/MAP, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|FIELD": "DO NOT USE, USE INTERPRETATION PROJECT/FIELD/RESERVOIR REPORT INSTEAD,  THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|FIELD WITH GEOMETRY": "DO NOT USE, USE FIELD/FIELD WITH GEOMETRY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|MICROSEISMIC": "DO NOT USE, USE MICROSEISMIC/REPORTS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|PHOTO": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|RAW FIELD": "DO NOT USE, USE FIELD/RAW FIELD  INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|SECTION-COLUMN": "DO NOT USE, USE CROSS SECTION INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "INTERPRETATION PROJECT|SYNTHETIC": "DO NOT USE, USE WELL LOG/SYNTHETIC  INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "INTERPRETATION PROJECT|TEST": "DO NOT USE, USE SUPPORT/SEISMIC ACQUISITION INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MAP|FOLD": "DO NOT USE, USE SUPPORT/SEISMIC ACQUISITION INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MAP|SP/BIN CENTER": "DO NOT USE, USE MAP/SEISMIC BASE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MAP|TOPO": "DO NOT USE, USE MAP/LOCATION INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MICROSEISMIC|GENERAL": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "MIGRATION|FIELD": "DO NOT USE", "MIGRATION|GATHERS": "DO NOT USE", "MIGRATION|IMAGE": "DO NOT USE", "MIGRATION|MICROSEISMIC": "DO NOT USE", "MIGRATION|MISC": "DO NOT USE", "MIGRATION|SECTION": "DO NOT USE", "MIGRATION|STACK": "DO NOT USE", "PROCESSED|UNKNOWN": "DO NOT USE, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "PRODUCTION/OPERATIONS|FIELD": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "PRODUCTION/OPERATIONS|FIELD/RESERVOIR REPORT": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "PRODUCTION/OPERATIONS|OPERATIONS": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "PRODUCTION/OPERATIONS|REGION/BASIN REPORT": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "REGULATORY|AGENCY": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "REGULATORY|CASING PRESSURE WAIVERS": "DO NOT USE, USE REGULATORY/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "REGULATORY|INTEGRITY TESTING": "DO NOT USE, USE REGULATORY/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "SUPPORT|GENERAL": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|OBSERVERS LOGS/REPORT": "DO NOT USE, USE OBSERVERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|PETREL": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|REFRACTION": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|REPORT": "DO NOT USE,  DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|REPORTS": "DO NOT USE,  DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SECTION": "DO NOT USE,  DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC ACQUISITION QC CHART": "DO NOT USE, USE ACQUISITION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC ACQUISITION QC REPORT": "DO NOT USE, USE ACQUISITION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC NAVIGATION QC REPORT": "DO NOT USE, USE NAVIGATION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC PROCESSING QC CHART": "DO NOT USE, USE SEISMIC PROCESSING REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC PROCESSING QC REPORT": "DO NOT USE, USE SEISMIC PROCESSING REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SYNTHETIC": "DO NOT USE, USE WELL LOG/SYNTHETIC  INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|VSP NAVIGATION QC REPORT": "DO NOT USE, USE VSP NAVIGATION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|VSP OBSERVERS LOGS / REPORT": "DO NOT USE, USE SUPPORT/OBSERVERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|VSP PROCESSING QC REPORT": "DO NOT USE, USE VSP PROCESSING REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "VELOCITY|CHECKSHOT": "DO NOT USE, USE VSP/CHECKSHOT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|ANNOTATED": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|BIOSTRATIGRAPHIC": "DO NOT USE, USE INTERPRETATION PROJECT/BIOSTRATIGRAPHY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|CASED HOLE": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|CORRELATION": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|DIGITAL": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|DIGITAL - ENHANCED (PARSED)": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|DRA CALIBRATION FILE (GEOGRAPHIC)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|EDITED": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|FIELD": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|FINAL": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|GEO_APPS": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|LIC CALIBRATION FILE (PETRA)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|MUD/SAMPLE LOG": "DO NOT USE, USE WELL LOG/MUDLOGGING INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|OPEN HOLE": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|PETRO_APPS": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|PRESSURE": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|PRODUCTION": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|RASTER": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|RAW": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|REPORT": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|SIF CALIBRATION FILE (TGS)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|SUPPORT": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|SYNTHETIC": "DO NOT USE, USE INTERPRETATION PROJECT/SYNTHETIC INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|UDB": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|XML CALIBRATION FILE (IHSE)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED"};
+
+const MANDATORY_FIELD_MATRIX_XOM = {"ADMIN": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "DOCAUTHOR": "WA", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "COMPLETION/WORKOVER": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "DOCAUTHOR": "WA", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "CSEM": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "WA"}, "DRILLING": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "WA", "BOTTOM_DEPTH_UOM": "WA", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "DOCAUTHOR": "WA", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "FIELD": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "F_FILE": "M", "L_FILE": "M", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "WA"}, "FINANCIAL": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "FORMATION EVALUATION": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "WA", "BOTTOM_DEPTH_UOM": "WA", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "VERTICAL_SCALE_UOM": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "GATHERS": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "FCDP": "M", "LCDP": "M", "F_FILE": "WA", "L_FILE": "WA", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "M"}, "GRAV-MAG": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "HES": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "DOCAUTHOR": "WA", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "LAND/LEGAL": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "MAP": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "MICROSEISMIC": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "FCDP": "M", "LCDP": "M", "F_FILE": "WA", "L_FILE": "WA", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "NAVIGATION": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "PROCESSED": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "FCDP": "M", "LCDP": "M", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "WA"}, "PRODUCTION/OPERATIONS": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "WA", "BOTTOM_DEPTH_UOM": "WA", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "DOCAUTHOR": "WA", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "REGULATORY": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}, "SUPPORT": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "F_FILE": "WA", "L_FILE": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "WA"}, "VELOCITY": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "WA", "LTRC": "WA", "TRACES": "WA", "FSP": "WA", "LSP": "WA", "FCDP": "WA", "LCDP": "WA", "SAMPLE_TYPE": "WA", "RECORD_LENGTH": "WA", "RECORD_LENGTH_UOM": "WA", "SAMPLE_RATE": "WA", "SAMPLE_RATE_UOM": "WA", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "WA"}, "VSP": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA", "3D_STEP_INLINE_AND_CROSSLINE_INCREMENT": "WA"}, "WELL LOG": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "M", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "M", "BOTTOM_DEPTH_UOM": "M", "ARCHIVE_DESCRIPTION": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M", "EXXONMOBIL_ENTITY": "WA", "INVENTORY_REMARKS": "WA", "VERTICAL_SCALE_UOM": "WA", "DOCUMENT_LANGUAGE": "M", "SOFTWARE_VERSION": "WA"}};
+
+const CONTROLLED_NOTES_XOM = {"DIGITAL_FORMAT": "Only values which are currently in the iGlass Reference table are allowed", "DIGITAL_FORMAT_REV": "For SEG-Y format: 0, 1.0, 2.0\nFor SEG-D format: 0, 1.0, 2.0, 2.1, 3.0, 3.1", "TITLE": "Free Text. See \"Field-Attribute Definitions\" sheet", "CATEGORY": "See Category-Subcategory Table", "SUB_CATEGORY": "See Category-Subcategory Table", "CREATED_BY": "Only values which are currently in the iGlass Reference table are allowed", "CREATED_FOR": "Only values which are currently in the iGlass Reference table are allowed", "EXCEPTION_CODE": "DUPLICATE, MERGED, NO CONTENTS, UNREADABLE, OTHER", "BIN_SPACING": "<inline spacing>m x <crossline spacing>m. Unit of measurement should be in metres.", "SAMPLE_TYPE": "TIME, DEPTH", "RECORD_LENGTH_UOM": "METERS, FEET", "SAMPLE_RATE_UOM": "MILLISECONDS, SECONDS", "DESCRIPTION": "Free Text. See \"Description Indexing Guide\" sheet for rules", "ARCHIVE_DESCRIPTION": "Free Text. See \"Description Indexing Guide\" sheet for rules", "PROCESS_DESCRIPTION": "Free Text. See \"Description Indexing Guide\" sheet for rules", "SOURCE_MEDIA_TYPE": "Only values which are currently in the iGlass Reference table are allowed", "SOURCE_CURRENT_LOCATION": "Only values which are currently in the iGlass Reference table are allowed"};
+
+const EXCEPTION_CODES_XOM = [{"code": "UNREADABLE", "description": "any issues reading/mounting media resulting in zero data, unable to copy or no password to access data", "lastCondition": "UNABLE TO READ"}, {"code": "BLANK", "description": "media contains zero data", "lastCondition": "BLANK TAPE"}, {"code": "PARTIAL READ", "description": "not able to extract all information from a file but still retrieved some data, possibly due to deteriorating media", "lastCondition": "ACCEPTABLE / POOR / EXTREMELY POOR"}, {"code": "DAMAGED", "description": "not able to read due to media being physically damaged", "lastCondition": "UNABLE TO READ"}, {"code": "UNABLE TO REFORMAT", "description": "not able to reformat a file, possibly due to being in a proprietary format or the media having write protection", "lastCondition": "UNABLE TO REFORMAT"}];
+
+const OOS_COUNTRIES_XOM = ["RUSSIA", "QATAR", "INDONESIA", "MALAYSIA"];
+
+const OOS_ITEMS_XOM = ["RESERVES"];
+
+const RESTRICTED_SOURCES_XOM = ["PIONEER", "PXD", "PXD MIGRATION", "PXD TRANGO", "TRANGO", "DENBURY", "DENBURY MIGRATION", "TERRASEIS", "TERRASEIS_EMC", "TERRASEIS_IOR", "XTO"];
+
+function stripInvisible(s){ return String(s||'').replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00A0]/g,''); }
+function normKey(s){ return stripInvisible(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function normHeader(s){ return stripInvisible(s).trim().toUpperCase().replace(/^INVENTORY:\s*/,'').replace(/^DIGITAL MEDIA:\s*/,'').replace(/^PHYSICAL MEDIA:\s*/,'').replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+
+const VALID_CATS = new Set(GOVERNANCE.map(g => normKey(g[0])));
+const VALID_PAIRS = new Set(GOVERNANCE.map(g => normKey(g[0]) + '|' + normKey(g[1])));
+const CAT_TO_SUBS = {};
+GOVERNANCE.forEach(g => {
+  const c = normKey(g[0]);
+  (CAT_TO_SUBS[c] = CAT_TO_SUBS[c] || new Set()).add(normKey(g[1]));
+});
+
+const ALLOWED_MAP = {}; // field -> Map(normalized input -> normalized value)
+ALLOWED_VALUES.forEach(a => {
+  const field = normHeader(a[0]);
+  const m = (ALLOWED_MAP[field] = ALLOWED_MAP[field] || new Map());
+  m.set(normKey(a[1]), a[2]);
+});
+
+// Shared Digital Format set for XOM engine — built from the same ALLOWED_VALUES source as GenV
+// so both engines always recognise the same format list. UKOOA is handled by fuzzy prefix match (not this set).
+const ALLOWED_FORMATS_XOM = new Set(
+  ALLOWED_VALUES.filter(a => a[0] === 'DIGITAL FORMAT').map(a => normKey(a[1]))
+);
+
+const REQUIRED_BY_CAT = {}; // category ('ALL' or specific) -> [{field, type}]
+const REQUIRED_FIELDS = [["ALL","CATEGORY","YES","CORE"],["ALL","SUBCATEGORY","YES","CORE"],["ALL","DESCRIPTION","YES","CORE"],["ALL","CREATED BY","YES","CORE"],["ALL","CREATED FOR","YES","CORE"],["ALL","CURRENT LOCATION","YES","CORE"],["ALL","ORIGINAL FILE NAME","YES","CORE"],["ALL","FILE SIZE (MB)","YES","CORE"],["ALL","DIGITAL FORMAT","YES","CORE"],["ALL","SOURCE BARCODE","NO","SOURCE"],["ALL","SOURCE MEDIA TYPE","YES","SOURCE"],["ALL","SOURCE CURRENT LOCATION","YES","SOURCE"],["ALL","SOURCE PERMANENT LOCATION","YES","SOURCE"],["FIELD","FSP","YES","SEISMIC"],["FIELD","LSP","YES","SEISMIC"],["FIELD","SAMPLE RATE","YES","SEISMIC"],["FIELD","RECORD LENGTH","YES","SEISMIC"],["FIELD","SAMPLE TYPE","YES","SEISMIC"],["PROCESSED","SAMPLE RATE","YES","SEISMIC"],["PROCESSED","RECORD LENGTH","YES","SEISMIC"],["PROCESSED","SAMPLE TYPE","YES","SEISMIC"],["VELOCITY","SAMPLE TYPE","YES","VELOCITY"],["VELOCITY","SAMPLE RATE","YES","VELOCITY"],["VELOCITY","RECORD LENGTH","YES","VELOCITY"]]; // [Category, Field, Required(YES/NO), Rule_Type]
+REQUIRED_FIELDS.forEach(r => {
+  const cat = normKey(r[0]);
+  const field = normHeader(r[1]);
+  const required = String(r[2]).toUpperCase() === 'YES';
+  if(!required) return;
+  (REQUIRED_BY_CAT[cat] = REQUIRED_BY_CAT[cat] || []).push({field, type: r[3]});
+});
+
+
+/* Mandatory/Where-Applicable matrix from the master governance workbook (per Category, per Field).
+   This is the authoritative source for required fields - it WINS when it conflicts with the
+   simpler REQUIRED_BY_CAT list above (i.e. if a field appears in the matrix for a category,
+   the matrix's M/WA verdict overrides the simple list for that field+category combo). */
+const MANDATORY_FIELD_MATRIX = {"ADMIN": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "COMPLETION/WORKOVER": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "CSEM": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "DRILLING": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "WA", "BOTTOM_DEPTH_UOM": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "FIELD": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "F_FILE": "M", "L_FILE": "M", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "FINANCIAL": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "FORMATION EVALUATION": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "WA", "BOTTOM_DEPTH_UOM": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "GATHERS": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "FCDP": "M", "LCDP": "M", "F_FILE": "WA", "L_FILE": "WA", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "GRAV-MAG": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "HES": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "LAND/LEGAL": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "MAP": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "MICROSEISMIC": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "FCDP": "M", "LCDP": "M", "F_FILE": "WA", "L_FILE": "WA", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "NAVIGATION": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "PROCESSED": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "FSP": "M", "LSP": "M", "FCDP": "M", "LCDP": "M", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "PRODUCTION/OPERATIONS": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "WA", "BOTTOM_DEPTH_UOM": "WA", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "REGULATORY": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "SUPPORT": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "VELOCITY": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "INLINE": "WA", "XLINE": "WA", "BIN_SPACING": "WA", "FTRC": "WA", "LTRC": "WA", "TRACES": "WA", "FSP": "WA", "LSP": "WA", "FCDP": "WA", "LCDP": "WA", "SAMPLE_TYPE": "WA", "RECORD_LENGTH": "WA", "RECORD_LENGTH_UOM": "WA", "SAMPLE_RATE": "WA", "SAMPLE_RATE_UOM": "WA", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "VSP": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "DIGITAL_FORMAT_REV": "WA", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "FTRC": "M", "LTRC": "M", "TRACES": "M", "SAMPLE_TYPE": "M", "RECORD_LENGTH": "M", "RECORD_LENGTH_UOM": "M", "SAMPLE_RATE": "M", "SAMPLE_RATE_UOM": "M", "DESCRIPTION": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}, "WELL LOG": {"CURRENT_LOCATION": "M", "ORIGINAL_FILE_NAME": "M", "FILE_SIZE_MB": "M", "DIGITAL_FORMAT": "M", "TITLE": "WA", "CATEGORY": "M", "SUB_CATEGORY": "M", "CREATED_BY": "M", "CREATED_FOR": "M", "CREATED_DATE": "WA", "EXCEPTION_CODE": "WA", "DESCRIPTION": "M", "TOP_DEPTH_UOM": "M", "BOTTOM_DEPTH_UOM": "M", "PROCESS_DESCRIPTION": "WA", "SEISMIC_WELL_PROJECTDATASTOR_REFERENCE": "M", "SOURCE_BARCODE": "WA", "SOURCE_MEDIA_TYPE": "M", "SOURCE_MEDIA_NUMBER": "WA", "SOURCE_CURRENT_LOCATION": "M", "SOURCE_PERMANENT_LOCATION": "M"}};
+
+function getRequiredFields(catKey){
+  const baseline = (REQUIRED_BY_CAT['ALL']||[]).concat(REQUIRED_BY_CAT[catKey]||[]);
+  const matrixForCat = MANDATORY_FIELD_MATRIX[catKey];
+  if(!matrixForCat) return baseline; // matrix doesn't cover this category - fall back entirely to the simple list
+  const matrixFields = new Set(Object.keys(matrixForCat));
+  const keep = baseline.filter(b => !matrixFields.has(b.field)); // fields the matrix has no opinion on - keep simple-list verdict
+  const fromMatrix = Object.entries(matrixForCat).filter(([f,v]) => v === 'M').map(([f]) => ({field: f, type: 'MATRIX (Mandatory)'}));
+  return keep.concat(fromMatrix);
+}
+
+/* ===================== XOM derived lookups ===================== */
+const VALID_CATS_XOM = new Set(GOVERNANCE_XOM.map(g => normKey(g[0])));
+const VALID_PAIRS_XOM = new Set(GOVERNANCE_XOM.map(g => normKey(g[0]) + '|' + normKey(g[1])));
+
+function getRequiredFieldsXOM(catKey){
+  const matrixForCat = MANDATORY_FIELD_MATRIX_XOM[catKey];
+  if(!matrixForCat) return [];
+  return Object.entries(matrixForCat).filter(([f,v]) => v === 'M').map(([f]) => ({field: f, type: 'MATRIX (Mandatory)'}));
+}
+// DUPLICATE is a valid Exception Code (the database acknowledging this item is a known duplicate) but is
+// intentionally NOT added to EXCEPTION_CODES_XOM itself, since that list drives the Last Condition cross-check
+// (LASTCONDITIONS_BY_CODE_XOM) - a duplicate can have any Last Condition, so it shouldn't be forced into one.
+const EXCEPTION_CODE_SET_XOM = new Set(EXCEPTION_CODES_XOM.map(e => normKey(e.code)).concat([normKey('DUPLICATE')]));
+const LASTCONDITIONS_BY_CODE_XOM = {}; // ExceptionCode -> Set of allowed Last Condition values (forward direction, per governance table)
+EXCEPTION_CODES_XOM.forEach(e => {
+  LASTCONDITIONS_BY_CODE_XOM[normKey(e.code)] = new Set(e.lastCondition.split('/').map(s => normKey(s.trim())));
+});
+// Last Condition values that unambiguously imply the media/file could not be used - if Exception Code
+// is blank when one of these appears, that's worth a REVIEW flag. "ACCEPTABLE / POOR / EXTREMELY POOR"
+// (the PARTIAL READ family) is deliberately excluded: per the governance doc's own clarification, a file
+// that reads back complete and OK from media in that overall condition gets NO exception code at all -
+// PARTIAL READ only applies to the specific incomplete file(s), not every item from that media.
+const UNUSABLE_LAST_CONDITIONS_XOM = new Set(['UNABLE_TO_READ','BLANK_TAPE','UNABLE_TO_REFORMAT'].map(normKey));
+const OOS_COUNTRY_SET_XOM = new Set(OOS_COUNTRIES_XOM.map(normKey));
+const RESTRICTED_SOURCE_LIST_XOM = RESTRICTED_SOURCES_XOM.map(normKey);
+
+// Map our internal field keys to plausible export header variants users might supply
+const FIELD_ALIASES = {
+  'KDM_ITEM_ID': ['KDM_ITEM_ID','ITEM_ID','KDM_ITEM_ID_'],
+  'QC_NAME': ['QC_NAME'],
+  'JOB_NUMBER': ['KDM_JOB','KDM_JOB_NUMBER','JOB_NUMBER','JOB_NO','JOB'],
+  'CATEGORY': ['CATEGORY'],
+  'SUB_CATEGORY': ['SUB_CATEGORY','SUBCATEGORY'],
+  'DESCRIPTION': ['DESCRIPTION'],
+  'CREATED_BY': ['CREATED_BY'],
+  'CREATED_FOR': ['CREATED_FOR'],
+  'CURRENT_LOCATION': ['CURRENT_LOCATION'],
+  'ORIGINAL_FILE_NAME': ['ORIGINAL_FILE_NAME'],
+  'FILE_SIZE_MB': ['FILE_SIZE_MB','FILE_SIZE'],
+  'DIGITAL_FORMAT': ['DIGITAL_FORMAT'],
+  'DIGITAL_FORMAT_REV': ['DIGITAL_FORMAT_REV'],
+  'SOURCE_BARCODE': ['SOURCE_BARCODE'],
+  'SOURCE_MEDIA_TYPE': ['SOURCE_MEDIA_TYPE'],
+  'SOURCE_CURRENT_LOCATION': ['SOURCE_CURRENT_LOCATION'],
+  'SOURCE_PERMANENT_LOCATION': ['SOURCE_PERMANENT_LOCATION'],
+  'FSP': ['FSP'],
+  'LSP': ['LSP'],
+  'SAMPLE_RATE': ['SAMPLE_RATE'],
+  'SAMPLE_RATE_UOM': ['SAMPLE_RATE_UOM'],
+  'RECORD_LENGTH': ['RECORD_LENGTH'],
+  'RECORD_LENGTH_UOM': ['RECORD_LENGTH_UOM'],
+  'SAMPLE_TYPE': ['SAMPLE_TYPE'],
+  'EXCEPTION_CODE': ['EXCEPTION_CODE'],
+  'LAST_CONDITION': ['LAST_CONDITION','PHYSICAL_MEDIA_LAST_CONDITION','CONDITION'],
+  'TITLE': ['TITLE'],
+  'INVENTORY_TYPE': ['INVENTORY_TYPE'],
+  'ITEM_REMARKS': ['ITEM_REMARKS','REMARK','INVENTORY_REMARK','INVENTORY_REMARKS'],
+  'ITEM_COMMENTS': ['ITEM_COMMENTS','COMMENTS','INVENTORY_COMMENTS','INVENTORY_COMMENT'],
+  'KDM_BARCODE': ['KDM_BARCODE','SRC_KDM_BARCODE','SOURCE_KDM_BARCODE'],
+  'CREATED_DATE': ['CREATED_DATE'],
+  'SEISMIC_COUNTRY': ['SEISMIC_COUNTRY','SEISMIC_COUNTRY_SEISMIC'],
+  'WELL_COUNTRY': ['WELL_COUNTRY','WELL_COUNTRY_WELL']
+};
+
+// XOM (ExxonMobil/iGlass) field aliases - distinct field set/header variants from GenV
+// Precomputed lookup: normalised header -> original FIELD_ALIASES key. Built once at load time.
+// The row-check loop used to rebuild this via Object.keys(FIELD_ALIASES).find(...) on every single
+// call - re-running normHeader()'s regex chain across every alias key, for every rule, on every row.
+// On a real 34,490-row export this cost ~17.8s just in wasted lookups (checked directly against
+// production data). Reading from this Map instead is O(1) per lookup. Confirmed same exception
+// count before/after (26,750) - this is a pure speed fix, no change in results.
+const ALIAS_KEY_BY_NORM_HEADER = new Map(Object.keys(FIELD_ALIASES).map(k => [normHeader(k), k]));
+
+const FIELD_ALIASES_XOM = {
+  'KDM_ITEM_ID': ['KDM_ITEM_ID','ITEM_ID'],
+  'QC_NAME': ['QC_NAME'],
+  'JOB_NUMBER': ['KDM_JOB','KDM_JOB_NUMBER','JOB_NUMBER','JOB_NO','JOB'],
+  'CLIENT_REF': ['CLIENT_REF','CLIENT_REF_NUMBER','CLIENT_REFERENCE','CLIENT_REF_NO'],
+  'CATEGORY': ['CATEGORY'],
+  'SUB_CATEGORY': ['SUB_CATEGORY','SUBCATEGORY'],
+  'DESCRIPTION': ['DESCRIPTION'],
+  'ARCHIVE_DESCRIPTION': ['ARCHIVE_DESCRIPTION'],
+  'PROCESS_DESCRIPTION': ['PROCESS_DESCRIPTION'],
+  'CREATED_BY': ['CREATED_BY'],
+  'CREATED_FOR': ['CREATED_FOR'],
+  'CREATED_DATE': ['CREATED_DATE'],
+  'CURRENT_LOCATION': ['CURRENT_LOCATION'],
+  'ORIGINAL_FILE_NAME': ['ORIGINAL_FILE_NAME'],
+  'FILE_SIZE_MB': ['FILE_SIZE_MB','FILE_SIZE'],
+  'DIGITAL_FORMAT': ['DIGITAL_FORMAT'],
+  'DIGITAL_FORMAT_REV': ['DIGITAL_FORMAT_REV'],
+  'TITLE': ['TITLE'],
+  'SOURCE_BARCODE': ['SOURCE_BARCODE','KDM_BARCODE'],
+  'SOURCE_MEDIA_TYPE': ['SOURCE_MEDIA_TYPE'],
+  'SOURCE_MEDIA_NUMBER': ['SOURCE_MEDIA_NUMBER'],
+  'SOURCE_CURRENT_LOCATION': ['SOURCE_CURRENT_LOCATION'],
+  'SOURCE_PERMANENT_LOCATION': ['SOURCE_PERMANENT_LOCATION'],
+  'EXCEPTION_CODE': ['EXCEPTION_CODE'],
+  'LAST_CONDITION': ['LAST_CONDITION','PHYSICAL_MEDIA_LAST_CONDITION','CONDITION'],
+  'COUNTRY': ['COUNTRY','AREA_COUNTRY','ARCHIVE_DESCRIPTION_COUNTRY','AREA'],
+  'SOURCE_REFERENCE': ['SEISMIC_WELL_PROJECTDATASTOR_REFERENCE','SURVEY_NAME','SOURCE_NAME','SEISMIC_WELL_PROJECTDATASTOR'],
+  'FSP': ['FSP'],
+  'LSP': ['LSP'],
+  'SAMPLE_RATE': ['SAMPLE_RATE'],
+  'SAMPLE_RATE_UOM': ['SAMPLE_RATE_UOM'],
+  'RECORD_LENGTH': ['RECORD_LENGTH'],
+  'RECORD_LENGTH_UOM': ['RECORD_LENGTH_UOM'],
+  'SAMPLE_TYPE': ['SAMPLE_TYPE'],
+  'TOP_DEPTH_UOM': ['TOP_DEPTH_UOM'],
+  'BOTTOM_DEPTH_UOM': ['BOTTOM_DEPTH_UOM'],
+  'DOCAUTHOR': ['DOCAUTHOR'],
+  'EXXONMOBIL_ENTITY': ['EXXONMOBIL_ENTITY'],
+  'INVENTORY_REMARKS': ['INVENTORY_REMARKS','ITEM_REMARKS','REMARK','INVENTORY_REMARK'],
+  'ITEM_COMMENTS': ['ITEM_COMMENTS','COMMENTS','INVENTORY_COMMENTS','INVENTORY_COMMENT'],
+  'SEISMIC_COUNTRY': ['SEISMIC_COUNTRY','SEISMIC_COUNTRY_SEISMIC'],
+  'WELL_COUNTRY': ['WELL_COUNTRY','WELL_COUNTRY_WELL'],
+  'DOCUMENT_LANGUAGE': ['DOCUMENT_LANGUAGE'],
+  'SOFTWARE_VERSION': ['SOFTWARE_VERSION']
+};
+
+/* Cross-field rules: IF <field> is one of <ifIn> THEN <field> must equal <thenEquals> (or just be non-blank if thenNotBlank:true). */
+const CROSS_FIELD_RULES = [
+  {
+    id: 'Unreadable-Requires-Exception-Code',
+    description: 'If file condition is UNREADABLE or UNABLE TO READ, Exception Code must be UNREADABLE',
+    ifField: 'LAST_CONDITION', ifIn: ['UNREADABLE','UNABLE TO READ'],
+    thenField: 'EXCEPTION_CODE', thenEquals: 'UNREADABLE',
+    severity: 'FAIL'
+  },
+  {
+    id: 'Unarchived-Requires-Exception-Code',
+    description: 'If Current Location is UNARCHIVED, Exception Code must not be blank',
+    ifField: 'CURRENT_LOCATION', ifIn: ['UNARCHIVED'],
+    thenField: 'EXCEPTION_CODE', thenNotBlank: true,
+    severity: 'FAIL'
+  }
+];
+
+/* Format/category consistency rules: IF Digital Format equals X THEN Category/Sub-Category must equal specific values. */
+const FORMAT_CATEGORY_RULES = [
+  {
+    id: 'P211-Must-Be-Navigation-Raw',
+    description: 'If Digital Format is P211, Category must be NAVIGATION and Sub-Category must be RAW',
+    ifField: 'DIGITAL_FORMAT', ifIn: ['P211'],
+    requireCategory: 'NAVIGATION', requireSubcategory: 'RAW',
+    severity: 'FAIL'
+  }
+];
+
+/* Category+Sub-Category-triggered field-value rules: if Category/Sub-Category match, a given field must equal a specific value. */
+const CATEGORY_SUBCATEGORY_FIELD_RULES = [
+  {
+    id: 'Support-General-Requires-Index-Only',
+    description: 'For Category SUPPORT / Sub-Category GENERAL, Exception Code must be INDEX ONLY',
+    ifCategory: 'SUPPORT', ifSubcategory: 'GENERAL',
+    field: 'EXCEPTION_CODE', requireValue: 'INDEX ONLY',
+    severity: 'FAIL'
+  }
+];
+
+/* Simple disallowed-value rules: a single field must never equal a given value. */
+const DISALLOWED_VALUE_RULES = [];
+/* Digital Format = UNKNOWN is handled as a REVIEW-tier check below (Unknown-Digital-Format), not a hard FAIL. */
+
+/* Forbidden Category/Sub-Category combinations. */
+const FORBIDDEN_SUBCATEGORY_RULES = [
+  {
+    id: 'WellLog-Cannot-Be-Support-Report',
+    description: 'Well Log category Sub-Category must not be SUPPORT or REPORT',
+    category: 'WELL LOG', forbiddenSubcategories: ['SUPPORT','REPORT'],
+    severity: 'FAIL'
+  }
+];
+
+/* Conditional content rules: IF Category/Subcategory matches THEN a given field must be non-blank
+   AND must contain at least one of the required keywords (e.g. curve info, or a statement that none exist). */
+const CONDITIONAL_CONTENT_RULES = [
+  {
+    id: 'WellLog-Curve-Or-Unavailable-Required',
+    description: 'For WELL LOG (any sub-category except CALIBRATION FILE, excluding LAS/DLIS format), Description must name at least one usable curve, or contain at least two of the words Unavailable / No / Priority / Curves',
+    ifCategory: 'WELL LOG', excludeSubcategory: 'CALIBRATION FILE',
+    field: 'DESCRIPTION',
+    exemptFormats: ['LAS','DLIS'],
+    keywords: ['SPONTANEOUS POTENTIAL','GAMMA RAY','RESISTIVITY','SONIC','DENSITY','POROSITY','PRESSURE','UNAVAILABLE: CURVES','NO PRIORITY CURVES AVAILABLE','NO PRIORITY CURVES PRESENT','UNAVAILABLE: NO PRIORITY CURVES PRESENT','UNAVAILABLE PRIORITY CURVES'],
+    severity: 'FAIL'
+  },
+  {
+    id: 'Calibration-Requires-Verification',
+    description: 'For WELL LOG / CALIBRATION FILE, Description must include "Verification" or "Verifications"',
+    ifCategory: 'WELL LOG', ifSubcategory: 'CALIBRATION FILE',
+    field: 'DESCRIPTION',
+    keywords: ['VERIFICATION','VERIFICATIONS'],
+    severity: 'FAIL'
+  },
+];
+
+/* Pattern-content rules: when triggered, a field must be non-blank AND match a "A | B" pattern with both sides non-blank. */
+const PATTERN_CONTENT_RULES = [
+  {
+    id: 'OutOfScope-Description-Format-Required',
+    description: 'For OUT OF SCOPE condition, Description must be formatted as "OOS Category | OOS Description" (non-blank on both sides)',
+    ifCategory: 'OUT OF SCOPE',
+    field: 'DESCRIPTION',
+    severity: 'FAIL'
+  }
+];
+
+/* Format-triggered required-content rules: for a given Category, if Digital Format is NOT one of the allowed formats,
+   the field must be non-blank. (Currently empty - the only WELL LOG sub-category that requires Description is
+   WIRELINE, which is already covered by WellLog-Curve-Or-Unavailable-Required.) */
+const FORMAT_REQUIRED_CONTENT_RULES = [];
+
+/* Format-triggered forbidden-content rules: for a Digital item with one of the given formats,
+   the listed fields must be BLANK (their presence is itself the exception).
+   exemptCombos: Category+SubCategory combinations where this rule does NOT apply. */
+const FORMAT_FORBIDDEN_CONTENT_RULES = [
+  {
+    id: 'LAS-DLIS-Must-Be-Blank',
+    description: 'For WELL LOG category Digital items with format LAS or DLIS, Description and Title must not be present',
+    requireInventoryType: 'KDM DIGITAL',
+    ifCategory: 'WELL LOG',
+    formats: ['LAS','DLIS'],
+    fields: ['DESCRIPTION','TITLE'],
+    exemptCombos: [],
+    severity: 'FAIL'
+  }
+];
+
+function updateClientUI(){
+  const aliases = getActiveFieldAliases();
+  document.getElementById('expectedCols').textContent = Object.keys(aliases).map(k=>k.replace(/_/g,' ')).join(', ');
+
+  const chips = document.getElementById('rulesChips');
+  const summary = document.getElementById('rulesSummary');
+  if(state.client === 'XOM'){
+    chips.innerHTML = [
+      '<div class="chip">' + GOVERNANCE_XOM.length + ' Category/Sub-Category pairs (Seismic + Well taxonomy)</div>',
+      '<div class="chip">' + Object.keys(MANDATORY_FIELD_MATRIX_XOM).length + '-category Mandatory/WA field matrix</div>',
+      '<div class="chip">' + EXCEPTION_CODES_XOM.length + ' Exception Codes (Last Condition table)</div>',
+      '<div class="chip">' + OOS_COUNTRIES_XOM.length + ' OOS restricted countries + ' + RESTRICTED_SOURCES_XOM.length + ' restricted sources</div>',
+      '<div class="chip">' + Object.values(DEPRECATED_NOTES_XOM).length + ' deprecated subcategory flags</div>'
+    ].join('');
+    summary.innerHTML = 'Checks run: Category/Sub-Category validity (incl. deprecated-subcategory warnings) &middot; Mandatory/Where-Applicable field governance &middot; Controlled values (Sample Type, UOMs, Exception Code) &middot; Last Condition/Exception Code cross-rules &middot; DMP job (Client Ref XFEP_DMP_*) Last Condition requirement &middot; Out-of-Scope country/item/source checks &middot; Foreign Language Document check &middot; Well Log/Wireline curve-content review.<br><br><strong>Source:</strong> KDM_XOM_Global_Data_Governance_Rules.xlsx (iGlass Data Governance, v6.8). Independent from the GenV ruleset. Judgment-call checks (curve content, foreign language wording) are capped at WARN/REVIEW severity and never produce a FAIL, to avoid false-failing valid items.';
+  } else {
+    chips.innerHTML = [
+      '<div class="chip">214 Category/Sub-Category pairs</div>',
+      '<div class="chip">24 Required-field rules + 21-category Mandatory/WA matrix</div>',
+      '<div class="chip">81 Controlled values</div>',
+      '<div class="chip" id="xfChip">5 Cross-field / consistency rules</div>',
+      '<div class="chip">4 Conditional content rules</div>',
+      '<div class="chip">3 Duplicate-detection checks</div>',
+      '<div class="chip">1 Review-tier check</div>'
+    ].join('');
+    summary.innerHTML = 'Checks run: Category/Sub-Category validity &middot; Mandatory/Where-Applicable fields &middot; Controlled value lookups &middot; Cross-field rules &middot; Conditional content rules &middot; Duplicate detection &middot; Review-tier judgment calls.';
+  }
+}
+
+/* ===================== State ===================== */
+const state = { rows: [], headerMap: {}, exceptions: [], client: 'GENV', odidbRows: [], odidbFilenameCol: null };
+
+function getActiveFieldAliases(){ return state.client === 'XOM' ? FIELD_ALIASES_XOM : FIELD_ALIASES; }
+
+function buildHeaderMap(headers, aliases){
+  aliases = aliases || getActiveFieldAliases();
+  const norm = headers.map(normHeader);
+  const map = {};
+  Object.entries(aliases).forEach(([key, list]) => {
+    for(const a of list){
+      const idx = norm.indexOf(a);
+      if(idx !== -1){ map[key] = headers[idx]; break; }
+    }
+  });
+  return map;
+}
+
+// Formats a real JS Date object as YYYY-MM-DD. With cellDates:true, SheetJS hands back actual
+// Date objects for date-formatted cells instead of raw Excel serial numbers - but naive
+// String(dateObj) produces a verbose, unparseable string like "Wed Feb 24 1998 00:00:00 GMT...",
+// so dates need this explicit formatting rather than falling through to the generic String() path.
+function formatDateValue(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function getVal(row, headerMap, key){
+  const h = headerMap[key];
+  if(!h) return '';
+  const v = row[h];
+  if(v === undefined || v === null) return '';
+  if(v instanceof Date) return formatDateValue(v);
+  return String(v).trim();
+}
+
+/* ===================== File loading ===================== */
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i], n=text[i+1];
+    if(c==='"' && q && n==='"'){cur+='"'; i++; continue;}
+    if(c==='"'){q=!q; continue;}
+    if(c===',' && !q){row.push(cur); cur=''; continue;}
+    if((c==='\n' || c==='\r') && !q){
+      if(c==='\r' && n==='\n') continue;
+      row.push(cur); if(row.some(v=>v!=='')) rows.push(row); row=[]; cur=''; continue;
+    }
+    cur+=c;
+  }
+  row.push(cur); if(row.some(v=>v!=='')) rows.push(row);
+  return rows;
+}
+
+function rowsToObjects(rows){
+  const headers = rows[0];
+  return rows.slice(1).map(r => Object.fromEntries(headers.map((h,i)=>[h, r[i] ?? '']))).filter(o => Object.values(o).some(v=>String(v).trim()!==''));
+}
+
+function loadOdidbFile(file){
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e => {
+    let objs = [];
+    if(ext === 'csv'){
+      const rows = parseCSV(e.target.result);
+      objs = rowsToObjects(rows);
+    } else {
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const sheetName = wb.SheetNames.find(n => /odidb/i.test(n)) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      objs = XLSX.utils.sheet_to_json(ws, {defval:''});
+    }
+    state.odidbRows = objs;
+    // Find whichever column looks like the Original File Name field, regardless of exact header wording
+    const headers = objs.length ? Object.keys(objs[0]) : [];
+    state.odidbFilenameCol = headers.find(h => /ORIGINAL[_\s]*FILE[_\s]*NAME/i.test(h)) || null;
+    document.getElementById('odidbFileInfo').textContent = state.odidbFilenameCol
+      ? objs.length + ' ODIDB rows loaded from "' + file.name + '". Matching on column: "' + state.odidbFilenameCol + '".'
+      : objs.length + ' ODIDB rows loaded, but no "Original File Name" column was found — cross-check will be skipped.';
+  };
+  if(ext === 'csv') reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+function loadDataFile(file){
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e => {
+    let objs = [];
+    if(ext === 'csv'){
+      const rows = parseCSV(e.target.result);
+      objs = rowsToObjects(rows);
+    } else {
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const sheetName = wb.SheetNames.find(n => /data|import|export/i.test(n)) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      objs = XLSX.utils.sheet_to_json(ws, {defval:''});
+    }
+    state.rows = objs;
+    const headers = objs.length ? Object.keys(objs[0]) : [];
+    state.rawHeaders = headers;
+    state.headerMap = buildHeaderMap(headers);
+    const aliases = getActiveFieldAliases();
+    document.getElementById('fileInfo').textContent = objs.length + ' rows loaded from "' + file.name + '". Matched ' + Object.keys(state.headerMap).length + '/' + Object.keys(aliases).length + ' known fields.';
+    document.getElementById('runBtn').disabled = objs.length === 0;
+  };
+  if(ext === 'csv') reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+/* ===================== QC Engine ===================== */
+function checkRowGENV(row, idx){
+  const hm = state.headerMap;
+  const cat = getVal(row, hm, 'CATEGORY');
+  const sub = getVal(row, hm, 'SUB_CATEGORY');
+  const itemId = getVal(row, hm, 'KDM_ITEM_ID') || (idx+1);
+  const qcName = getVal(row, hm, 'QC_NAME');
+  const jobNumber = getVal(row, hm, 'JOB_NUMBER');
+  const exs = [];
+  const digitalFormat = getVal(row, hm, 'DIGITAL_FORMAT');
+  const add = (field, rule, actual, severity, reason) => exs.push({row: idx+2, itemId, qcName, jobNumber, category: cat, sub, digitalFormat, field, rule, actual, severity, reason});
+  // If Exception Code is DUPLICATE, this item is a duplicate of another item in the database that
+  // already carries the required data - so "missing content" checks are bypassed entirely for it.
+  const isDuplicateException = hm['EXCEPTION_CODE'] && normKey(getVal(row, hm, 'EXCEPTION_CODE')) === normKey('DUPLICATE');
+
+  // 1. Category / Sub-Category governance check
+  if(!cat){
+    add('CATEGORY','Required','', 'FAIL','Category is blank');
+  } else if(!VALID_CATS.has(normKey(cat))){
+    add('CATEGORY','Allowed list', cat, 'FAIL','Category not found in governance list');
+  } else if(sub && !VALID_PAIRS.has(normKey(cat)+'|'+normKey(sub))){
+    add('SUB_CATEGORY','Allowed list', sub, 'FAIL','Sub-Category not valid for this Category');
+  }
+  if(!sub){
+    add('SUB_CATEGORY','Required','', 'FAIL','Sub-Category is blank');
+  }
+
+  // 2. Required fields: ALL core/source rules + category-specific rules
+  const rulesToCheck = isDuplicateException ? [] : getRequiredFields(normKey(cat));
+  rulesToCheck.forEach(rule => {
+    if(rule.field === 'CATEGORY' || rule.field === 'SUB_CATEGORY' || rule.field === 'SUBCATEGORY') return; // already checked above
+    if(rule.field === 'FILE_SIZE_MB' && normKey(cat) === normKey('WELL LOG')) return; // WELL LOG digital files are often loaded from other software without a captured file size
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(rule.field) || rule.field;
+    const val = getVal(row, hm, key);
+    if(!hm[key]){
+      // field not present in export at all - flag once as WARN (can't validate)
+      return;
+    }
+    if(!val){
+      if(key === 'DESCRIPTION'){
+        // Mandatory Description (CORE / Matrix Mandatory) is no longer generically enforced.
+        // Description requirements now live ONLY in the dedicated rules below:
+        // - OUT OF SCOPE: OutOfScope-Description-Format-Required (Description must follow the OOS pattern)
+        // - WELL LOG: WellLog-Curve-Or-Unavailable-Required (Description must name a curve or state none available)
+        // Every other category/sub-category has no Description requirement at all.
+        return;
+      } else if(key === 'TITLE'){
+        // Blank Title is governed as follows:
+        // skipped for OUT OF SCOPE, all of WELL LOG (including WIRELINE), and LIS/LAS/DLIS digital format.
+        // For WELL LOG/WIRELINE with LIS/DLIS/LAS format specifically, a blank Title is correct/expected
+        // (enforced separately as a requirement by LAS-DLIS-Must-Be-Blank), so it must never be flagged as missing here.
+        const isOOS = normKey(cat) === normKey('OUT OF SCOPE');
+        const isWellLog = normKey(cat) === normKey('WELL LOG');
+        const fmt = hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : '';
+        const isExemptFormat = ['LIS','LAS','DLIS','LWD','MWD'].includes(fmt);
+        if(isOOS || isWellLog || isExemptFormat) return;
+        add(key, 'Title-Unavailable-Note', '', 'REVIEW', 'Title is blank');
+      } else {
+        add(key, 'Required ('+rule.type+')', '', 'FAIL', 'Mandatory field is blank');
+      }
+    }
+  });
+
+  // 3. Controlled value checks
+  Object.entries(ALLOWED_MAP).forEach(([field, map]) => {
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(field);
+    if(!key || !hm[key]) return;
+    const val = getVal(row, hm, key);
+    if(!val) return; // blank already caught by required-field check
+    // Fuzzy match: any Digital Format value that starts with "UKOOA" (UKOOA, UKOOA P1/90, UKOOA P2/91,
+    // UKOOA-RAW, UKOOA P1/90 REV2, etc.) is accepted as a valid UKOOA-family format, regardless of suffix.
+    if(field === 'DIGITAL_FORMAT' && normKey(val).startsWith('UKOOA')) return;
+    if(!map.has(normKey(val))){
+      add(key, 'Controlled value', val, 'WARN', 'Value not in approved reference list for ' + field.replace(/_/g,' '));
+    }
+  });
+
+  // 4. Cross-field rules
+  CROSS_FIELD_RULES.forEach(rule => {
+    if(!hm[rule.ifField] || !hm[rule.thenField]) return; // can't evaluate if either column missing
+    const ifVal = normKey(getVal(row, hm, rule.ifField));
+    const triggered = (rule.ifIn || []).some(v => normKey(v) === ifVal);
+    if(!triggered) return;
+    const thenVal = getVal(row, hm, rule.thenField);
+    if(rule.thenNotBlank){
+      if(!thenVal) add(rule.thenField, rule.id, '', rule.severity, rule.description);
+    } else if(rule.thenEquals !== undefined){
+      if(normKey(thenVal) !== normKey(rule.thenEquals)) add(rule.thenField, rule.id, thenVal || '(blank)', rule.severity, rule.description);
+    }
+  });
+
+  // 4a2. Category+Sub-Category-triggered field-value rules
+  CATEGORY_SUBCATEGORY_FIELD_RULES.forEach(rule => {
+    if(normKey(cat) !== normKey(rule.ifCategory) || normKey(sub) !== normKey(rule.ifSubcategory)) return;
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(normHeader(rule.field)) || rule.field;
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    if(normKey(val) !== normKey(rule.requireValue)){
+      add(key, rule.id, val || '(blank)', rule.severity, rule.description);
+    }
+  });
+
+  // 4b. Format/Category consistency rules
+  FORMAT_CATEGORY_RULES.forEach(rule => {
+    if(!hm[rule.ifField]) return;
+    const ifVal = normKey(getVal(row, hm, rule.ifField));
+    const triggered = (rule.ifIn || []).some(v => normKey(v) === ifVal);
+    if(!triggered) return;
+    if(rule.requireCategory && normKey(cat) !== normKey(rule.requireCategory)){
+      add('CATEGORY', rule.id, cat || '(blank)', rule.severity, rule.description);
+    }
+    if(rule.requireSubcategory && normKey(sub) !== normKey(rule.requireSubcategory)){
+      add('SUB_CATEGORY', rule.id, sub || '(blank)', rule.severity, rule.description);
+    }
+  });
+
+  // 4c. Disallowed single-value rules
+  DISALLOWED_VALUE_RULES.forEach(rule => {
+    if(!hm[rule.field]) return;
+    const val = getVal(row, hm, rule.field);
+    if(rule.disallowed.some(v => normKey(v) === normKey(val))){
+      add(rule.field, rule.id, val, rule.severity, rule.description);
+    }
+  });
+
+  // 4d. Forbidden Category/Sub-Category combinations
+  FORBIDDEN_SUBCATEGORY_RULES.forEach(rule => {
+    if(normKey(cat) !== normKey(rule.category)) return;
+    if(rule.forbiddenSubcategories.some(v => normKey(v) === normKey(sub))){
+      add('SUB_CATEGORY', rule.id, sub, rule.severity, rule.description);
+    }
+  });
+
+  // 4e. Pattern-content rules ("A | B" with both sides non-blank)
+  if(!isDuplicateException) PATTERN_CONTENT_RULES.forEach(rule => {
+    if(rule.ifCategory && normKey(cat) !== normKey(rule.ifCategory)) return;
+    if(rule.ifSubcategory && normKey(sub) !== normKey(rule.ifSubcategory)) return;
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(normHeader(rule.field)) || rule.field;
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    if(!val){ add(key, rule.id, '', rule.severity, rule.description + ' (field is blank)'); return; }
+    const parts = val.split('|').map(p=>p.trim());
+    if(parts.length !== 2 || !parts[0] || !parts[1]){
+      add(key, rule.id, val, rule.severity, rule.description + ' (missing "Category | Description" pipe format)');
+    }
+  });
+
+  // 4f. Format-triggered required-content rules
+  FORMAT_REQUIRED_CONTENT_RULES.forEach(rule => {
+    if(normKey(cat) !== normKey(rule.category)) return;
+    if(!hm['DIGITAL_FORMAT']) return;
+    const fmt = normKey(getVal(row, hm, 'DIGITAL_FORMAT'));
+    if(rule.exemptFormats.some(v => normKey(v) === fmt)) return; // exempt format, no requirement
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(normHeader(rule.field)) || rule.field;
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    if(!val) add(key, rule.id, '', rule.severity, rule.description);
+  });
+
+  // 4g. Format-triggered forbidden-content rules (fields must be BLANK when triggered)
+  FORMAT_FORBIDDEN_CONTENT_RULES.forEach(rule => {
+    if(rule.ifCategory && normKey(cat) !== normKey(rule.ifCategory)) return;
+    if(rule.requireInventoryType && hm['INVENTORY_TYPE']){
+      const invType = getVal(row, hm, 'INVENTORY_TYPE').toUpperCase();
+      if(!invType.includes('DIGITAL')) return; // not a digital item, rule doesn't apply
+    }
+    const fmt = hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : '';
+    const formatTriggered = fmt && rule.formats.some(v => normKey(v) === fmt);
+    const subcatTriggered = rule.orCategory && normKey(cat) === normKey(rule.orCategory) && normKey(sub) === normKey(rule.orSubcategory);
+    if(!formatTriggered && !subcatTriggered) return;
+    // exemptCombos: skip this rule for specific Category/SubCategory combinations
+    if(rule.exemptCombos && rule.exemptCombos.some(c => normKey(cat) === normKey(c.category) && normKey(sub) === normKey(c.subcategory))) return;
+    rule.fields.forEach(f => {
+      const key = ALIAS_KEY_BY_NORM_HEADER.get(normHeader(f)) || f;
+      if(!hm[key]) return;
+      const val = getVal(row, hm, key);
+      if(val){
+        add(key, rule.id, val, rule.severity, rule.description);
+      }
+    });
+  });
+
+  // 4h. REVIEW: Digital Format = UNKNOWN - check Item Remarks for known explanations, and use file extension as a guess
+  if(hm['DIGITAL_FORMAT'] && normKey(getVal(row, hm, 'DIGITAL_FORMAT')) === normKey('UNKNOWN')){
+    const size = hm['FILE_SIZE_MB'] ? getVal(row, hm, 'FILE_SIZE_MB') : '';
+    const hasSize = size && parseFloat(size) > 0;
+    const remarks = hm['ITEM_REMARKS'] ? getVal(row, hm, 'ITEM_REMARKS').toUpperCase() : '';
+    const knownPhrases = UNKNOWN_FORMAT_PHRASES;
+    const matchedPhrase = knownPhrases.find(p => remarks.includes(p));
+    if(!matchedPhrase){
+      // No recognized explanation in Item Remarks - this one actually needs a human look
+      let reason = hasSize
+        ? 'Digital Format is UNKNOWN and file has a size, but Item Remarks does not contain a recognized explanation - review needed'
+        : 'Digital Format is UNKNOWN - review to confirm correct format';
+      // Extension only comes into play when the format is UNKNOWN - it's a hint at what the real format might be
+      if(hm['ORIGINAL_FILE_NAME']){
+        const fname = getVal(row, hm, 'ORIGINAL_FILE_NAME');
+        const extMatch = fname.match(/\.([A-Za-z0-9]{1,6})$/);
+        if(extMatch){
+          const guesses = EXTENSION_TO_FORMAT_GUESS[normKey(extMatch[1])];
+          if(guesses) reason += '. File extension ".'+extMatch[1]+'" suggests it may actually be ' + guesses.join(' or ') + ' - review and correct if so';
+        }
+      }
+      add('DIGITAL_FORMAT', 'Unknown-Digital-Format', 'UNKNOWN' + (size ? ' (size: '+size+')' : ''), 'REVIEW', reason);
+    }
+    // If Item Remarks already explains the UNKNOWN format (e.g. "SSCAN: format NOT determined", "No Reformat"),
+    // that's an accepted, documented case - no review flag needed.
+  }
+
+  // 5. Conditional content rules (category/subcategory-triggered content requirements)
+  if(!isDuplicateException) CONDITIONAL_CONTENT_RULES.forEach(rule => {
+    if(normKey(cat) !== normKey(rule.ifCategory)) return;
+    if(rule.ifSubcategory){
+      const subList = Array.isArray(rule.ifSubcategory) ? rule.ifSubcategory : [rule.ifSubcategory];
+      if(!subList.some(s => normKey(s) === normKey(sub))) return;
+    }
+    if(rule.excludeSubcategory){
+      const exList = Array.isArray(rule.excludeSubcategory) ? rule.excludeSubcategory : [rule.excludeSubcategory];
+      if(exList.some(s => normKey(s) === normKey(sub))) return;
+    }
+    const fmt = hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : '';
+    // exemptFormats: rule does NOT apply to these formats
+    if(rule.exemptFormats && fmt && rule.exemptFormats.some(v => normKey(v) === fmt)) return;
+    // onlyFormats: rule ONLY applies to these formats — skip if format is not in the list
+    if(rule.onlyFormats && (!fmt || !rule.onlyFormats.some(v => normKey(v) === fmt))) return;
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(normHeader(rule.field)) || rule.field;
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    // Special case: for WELL LOG / WIRELINE items with Digital Format ZIP, this rule is softened to
+    // REVIEW instead of FAIL — ZIP wireline packages often can't be reduced to a simple curve/unavailable
+    // statement the same way a single LAS/DLIS-style file can, so it's flagged for a look rather than
+    // treated as a hard governance violation.
+    const isZipWireline = rule.id === 'WellLog-Curve-Or-Unavailable-Required' && normKey(sub) === normKey('WIRELINE') && fmt === normKey('ZIP');
+    const effectiveSeverity = isZipWireline ? 'REVIEW' : rule.severity;
+    if(!val){
+      add(key, rule.id, '', effectiveSeverity, rule.description + ' (field is blank)');
+      return;
+    }
+    // If keywords is null the rule only requires the field to be non-blank — no keyword check needed
+    if(!rule.keywords) return;
+    const upper = val.toUpperCase();
+    const hasNamedCurveOrPhrase = rule.keywords.some(kw => upper.includes(kw));
+    // Flexible "curves unavailable" statement match: passes if the description contains AT LEAST TWO of
+    // these words (Unavailable, No, Priority, Curves), in any combination, anywhere in the text - not just
+    // the small set of exact fixed phrases above. Requiring two words (rather than just one) avoids false
+    // passes from a single common word like "no" appearing incidentally. This flexible match ONLY applies
+    // to WellLog-Curve-Or-Unavailable-Required (the curve-listing rule) - other keyword-based rules must
+    // match their actual required keyword and don't get this leniency.
+    const flexibleWords = ['UNAVAILABLE','NO','PRIORITY','CURVES'];
+    const flexibleWordCount = flexibleWords.filter(w => new RegExp('\\b'+w+'\\b').test(upper)).length;
+    const hasUnavailableStatement = rule.id === 'WellLog-Curve-Or-Unavailable-Required' && flexibleWordCount >= 2;
+    let hasKeyword = hasNamedCurveOrPhrase || hasUnavailableStatement;
+    if(!hasKeyword && rule.id === 'WellLog-Curve-Or-Unavailable-Required'){
+      // Comments/Remarks fallback: "CURVES" is mandatory, plus at least one of Unavailable/No/Priority
+      // alongside it (e.g. "Curves Unavailable", "No Curves", "Curves - Priority not determined").
+      const checkAltText = text => {
+        if(!text) return false;
+        const named = rule.keywords.some(kw => text.includes(kw));
+        const hasCurves = /\bCURVES\b/.test(text);
+        const hasOtherWord = ['UNAVAILABLE','NO','PRIORITY'].some(w => new RegExp('\\b'+w+'\\b').test(text));
+        return named || (hasCurves && hasOtherWord);
+      };
+      const commentsVal = hm['ITEM_COMMENTS'] ? getVal(row, hm, 'ITEM_COMMENTS').toUpperCase() : '';
+      const remarksVal  = hm['ITEM_REMARKS']  ? getVal(row, hm, 'ITEM_REMARKS').toUpperCase()  : '';
+      if(checkAltText(commentsVal) || checkAltText(remarksVal)) hasKeyword = true;
+    }
+    if(!hasKeyword){
+      const reasonSuffix = rule.id === 'WellLog-Curve-Or-Unavailable-Required'
+        ? ' (no usable curve named, and fewer than two of Unavailable/No/Priority/Curves found in Description, Comments, or Remarks)'
+        : ' (required keyword not found in Description)';
+      add(key, rule.id, val, effectiveSeverity, rule.description + reasonSuffix);
+    }
+  });
+
+  // Country field check — at least one of Seismic Country or Well Country should be populated.
+  // If both are blank, check Item Comments and Item Remarks for an UNAVAILABLE note before flagging.
+  // Also check whether ANY other row sharing this same KDM Item ID already has a country populated —
+  // if so, treat the whole item as covered rather than flagging rows individually.
+  // Always REVIEW (never FAIL) since country is often blank for in-progress or admin items.
+  const hasSeismicCountry = hm['SEISMIC_COUNTRY'] && getVal(row, hm, 'SEISMIC_COUNTRY');
+  const hasWellCountry    = hm['WELL_COUNTRY']    && getVal(row, hm, 'WELL_COUNTRY');
+  const eitherPresent = hm['SEISMIC_COUNTRY'] || hm['WELL_COUNTRY'];
+  const coveredBySiblingRow = state.countryPresentItemIds && state.countryPresentItemIds.has(itemId);
+  if(!isDuplicateException && eitherPresent && !hasSeismicCountry && !hasWellCountry && !coveredBySiblingRow){
+    const comments = hm['ITEM_COMMENTS'] ? getVal(row, hm, 'ITEM_COMMENTS').toUpperCase() : '';
+    const remarks  = hm['ITEM_REMARKS']  ? getVal(row, hm, 'ITEM_REMARKS').toUpperCase()  : '';
+    const noted = /UNAVAILABLE[^;]*COUNTR/i.test(comments) || /UNAVAILABLE[^;]*COUNTR/i.test(remarks) ||
+                  comments.includes('UNAVAILABLE COUNTRY') || remarks.includes('UNAVAILABLE COUNTRY');
+    if(!noted){
+      add('SEISMIC_COUNTRY', 'Country-blank', '', 'REVIEW',
+        'Both Seismic Country and Well Country are blank — at least one should be populated. If genuinely unavailable, note it in Item Comments (e.g. "UNAVAILABLE COUNTRY")');
+    }
+  }
+
+  // WellLog-Title-Unavailable-Note check — WELL LOG category items with a blank Title should have that
+  // noted in Description, Item Comments, or Item Remarks (e.g. "Title Unavailable"). If Title is blank
+  // and no such note is found, flag as a WARN (not a hard FAIL — a missing note doesn't necessarily mean bad data).
+  // Skipped entirely for LAS or DLIS format (any WELL LOG sub-category), since LAS-DLIS-Must-Be-Blank already
+  // requires Title to be blank there — no explanation needed for something that's supposed to be blank.
+  const isLasDlis = ['LAS','DLIS'].some(f => normKey(f) === (hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : ''));
+  if(!isDuplicateException && normKey(cat) === normKey('WELL LOG') && hm['TITLE'] && !isLasDlis){
+    const titleVal = getVal(row, hm, 'TITLE');
+    if(!titleVal){
+      const descVal  = hm['DESCRIPTION']   ? getVal(row, hm, 'DESCRIPTION').toUpperCase()   : '';
+      const comments = hm['ITEM_COMMENTS'] ? getVal(row, hm, 'ITEM_COMMENTS').toUpperCase() : '';
+      const remarks  = hm['ITEM_REMARKS']  ? getVal(row, hm, 'ITEM_REMARKS').toUpperCase()  : '';
+      const noted = (descVal.includes('UNAVAILABLE') && descVal.includes('TITLE')) ||
+                    (comments.includes('UNAVAILABLE') && comments.includes('TITLE')) ||
+                    (remarks.includes('UNAVAILABLE') && remarks.includes('TITLE'));
+      if(!noted){
+        add('TITLE', 'WellLog-Title-Unavailable-Note', '', 'REVIEW',
+          'Title is blank and Description/Item Remarks/Comments does not state "Title Unavailable" (or similar) to explain why');
+      }
+    }
+  }
+
+  return exs;
+}
+
+/* ===================== XOM (ExxonMobil) QC engine - fully independent of GENV's rules/constants above ===================== */
+function checkRowXOM(row, idx){
+  const hm = state.headerMap;
+  const cat = getVal(row, hm, 'CATEGORY');
+  const sub = getVal(row, hm, 'SUB_CATEGORY');
+  const itemId = getVal(row, hm, 'KDM_ITEM_ID') || (idx+1);
+  const qcName = getVal(row, hm, 'QC_NAME');
+  const jobNumber = getVal(row, hm, 'JOB_NUMBER');
+  const exs = [];
+  const digitalFormat = getVal(row, hm, 'DIGITAL_FORMAT');
+  const add = (field, rule, actual, severity, reason) => exs.push({row: idx+2, itemId, qcName, jobNumber, category: cat, sub, digitalFormat, field, rule, actual, severity, reason});
+  // If Exception Code is DUPLICATE, this item is a duplicate of another item in the database that
+  // already carries the required data - so "missing content" checks are bypassed entirely for it.
+  const isDuplicateException = hm['EXCEPTION_CODE'] && normKey(getVal(row, hm, 'EXCEPTION_CODE')) === normKey('DUPLICATE');
+
+  // 1. Category / Sub-Category governance check (Seismic + Well Indexing Cat-Subcats tabs)
+  const catKey = normKey(cat), subKey = normKey(sub);
+  if(!cat){
+    add('CATEGORY','Required','', 'FAIL','Category is blank');
+  } else if(!VALID_CATS_XOM.has(catKey)){
+    add('CATEGORY','Allowed list', cat, 'FAIL','Category not found in XOM governance taxonomy');
+  } else if(sub && !VALID_PAIRS_XOM.has(catKey+'|'+subKey)){
+    add('SUB_CATEGORY','Allowed list', sub, 'FAIL','Sub-Category not valid for this Category in XOM taxonomy');
+  } else if(sub){
+    const noteKey = catKey + '|' + subKey;
+    if(DEPRECATED_NOTES_XOM[noteKey]){
+      add('SUB_CATEGORY','Deprecated subcategory', sub, 'WARN', DEPRECATED_NOTES_XOM[noteKey]);
+    }
+  }
+  if(!sub){
+    add('SUB_CATEGORY','Required','', 'FAIL','Sub-Category is blank');
+  }
+
+  // 2. Mandatory/Where-Applicable field governance (Inventory Field Governance tab)
+  // Description specifically is downgraded to WARN rather than FAIL when blank - other mandatory
+  // fields from this governance matrix remain FAIL.
+  const rulesToCheck = isDuplicateException ? [] : getRequiredFieldsXOM(catKey);
+  rulesToCheck.forEach(rule => {
+    if(rule.field === 'CATEGORY' || rule.field === 'SUB_CATEGORY' || rule.field === 'TITLE') return; // Category/Sub-Category checked above, Title has its own rule below
+    const key = Object.keys(FIELD_ALIASES_XOM).find(k => normHeader(k) === rule.field) || rule.field;
+    if(!hm[key]) return; // field not present in export at all - can't validate
+    const val = getVal(row, hm, key);
+    if(!val){
+      const severity = key === 'DESCRIPTION' ? 'WARN' : 'FAIL';
+      add(key, 'Required ('+rule.type+')', '', severity, 'Mandatory field is blank');
+    }
+  });
+
+  // 2b. Title - always required (mandatory), but if blank, PASS as long as Description, Comments, or
+  // Item Remarks documents the title as unavailable (e.g. "UNAVAILABLE: TITLE" / "UNAVAILABLE:(TITLE)").
+  // Otherwise REVIEW, not FAIL, since this needs a human to confirm the title is genuinely undeterminable
+  // rather than just missed.
+  // Skipped entirely for LAS or DLIS format (any category/sub-category), since LAS-DLIS-Must-Be-Blank already
+  // requires Title to be blank there — no explanation needed for something that's supposed to be blank.
+  const isLasDlisXOM = catKey === normKey('WELL LOG') && ['LAS','DLIS'].some(f => normKey(f) === (hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : ''));
+  if(!isDuplicateException && hm['TITLE'] && !isLasDlisXOM){
+    const titleVal = getVal(row, hm, 'TITLE');
+    if(!titleVal){
+      const descVal  = hm['DESCRIPTION']       ? getVal(row, hm, 'DESCRIPTION').toUpperCase()       : '';
+      const comments = hm['ITEM_COMMENTS']     ? getVal(row, hm, 'ITEM_COMMENTS').toUpperCase()     : '';
+      const remarks  = hm['INVENTORY_REMARKS'] ? getVal(row, hm, 'INVENTORY_REMARKS').toUpperCase() : '';
+      const pattern = /UNAVAILABLE\s*:?\s*\(?\s*TITLE\s*\)?/;
+      const noted = pattern.test(descVal) || pattern.test(comments) || pattern.test(remarks);
+      if(!noted){
+        add('TITLE','Title-Unavailable-Note', '', 'REVIEW', 'Title is blank - either populate Title, or document it as unavailable in Description, Comments, or Inventory Remarks (e.g. "UNAVAILABLE: TITLE")');
+      }
+    }
+  }
+
+  // 3. Controlled value checks (Sample Type, Record Length UOM, Sample Rate UOM, Exception Code, Digital Format)
+  const checkControlled = (key, allowed) => {
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    if(!val) return;
+    if(!allowed.has(normKey(val))){
+      add(key, 'Controlled value', val, 'WARN', 'Value not in approved reference list for ' + key.replace(/_/g,' '));
+    }
+  };
+  // Digital Format — same allowed list as GenV; UKOOA is fuzzy-matched (any value starting with UKOOA passes)
+  if(hm['DIGITAL_FORMAT']){
+    const fmt = getVal(row, hm, 'DIGITAL_FORMAT');
+    if(fmt && !normKey(fmt).startsWith('UKOOA') && !ALLOWED_FORMATS_XOM.has(normKey(fmt))){
+      add('DIGITAL_FORMAT', 'Controlled value', fmt, 'WARN', 'Digital Format not in approved reference list');
+    }
+  }
+  checkControlled('SAMPLE_TYPE', new Set(['TIME','DEPTH']));
+  checkControlled('RECORD_LENGTH_UOM', new Set(['METERS','FEET']));
+  checkControlled('SAMPLE_RATE_UOM', new Set(['MILLISECONDS','SECONDS']));
+  if(hm['EXCEPTION_CODE']){
+    const val = getVal(row, hm, 'EXCEPTION_CODE');
+    if(val && !EXCEPTION_CODE_SET_XOM.has(normKey(val))){
+      add('EXCEPTION_CODE','Controlled value', val, 'WARN', 'Exception Code not in XOM Last Condition & Exception Code table (UNREADABLE, BLANK, PARTIAL READ, DAMAGED, UNABLE TO REFORMAT)');
+    }
+  }
+
+  // 4. Last Condition / Exception Code cross-rules (Last Condition & Exception Code tab)
+  if(hm['LAST_CONDITION']){
+    const lc = getVal(row, hm, 'LAST_CONDITION');
+    const lcKey = normKey(lc);
+    const ec = hm['EXCEPTION_CODE'] ? getVal(row, hm, 'EXCEPTION_CODE') : '';
+    const ecKey = normKey(ec);
+    if(lc && ec && LASTCONDITIONS_BY_CODE_XOM[ecKey]){
+      // Exception Code IS populated - verify the Last Condition is one of the values allowed for that code
+      if(!LASTCONDITIONS_BY_CODE_XOM[ecKey].has(lcKey)){
+        add('LAST_CONDITION','XOM-LC-0001', lc, 'FAIL', 'Exception Code "'+ec+'" requires Last Condition to be one of: '+EXCEPTION_CODES_XOM.find(e=>normKey(e.code)===ecKey).lastCondition);
+      }
+    } else if(lc && !ec && UNUSABLE_LAST_CONDITIONS_XOM.has(lcKey)){
+      // Exception Code is blank, but Last Condition unambiguously implies the item could not be read/used.
+      // (Acceptable/Poor/Extremely Poor - the PARTIAL READ family - is intentionally NOT flagged here: per the
+      // governance doc, a file that reads back complete from media in that condition gets no exception code at all.)
+      add('EXCEPTION_CODE','XOM-LC-0001', '(blank)', 'REVIEW', 'Last Condition "'+lc+'" suggests the item could not be read/used - confirm whether an Exception Code (UNREADABLE, BLANK, or DAMAGED) applies');
+    }
+  }
+  if(hm['CURRENT_LOCATION']){
+    const loc = normKey(getVal(row, hm, 'CURRENT_LOCATION'));
+    if(loc === normKey('UNARCHIVED') && hm['EXCEPTION_CODE']){
+      const ec = getVal(row, hm, 'EXCEPTION_CODE');
+      if(!ec) add('EXCEPTION_CODE','XOM-LC-0002', '', 'FAIL', 'Current Location is UNARCHIVED - Exception Code must not be blank');
+    }
+  }
+  // Mandatory Last Condition/Exception Code for DMP jobs (Client Ref # -> XFEP_DMP_***)
+  if(hm['CLIENT_REF']){
+    const ref = getVal(row, hm, 'CLIENT_REF').toUpperCase();
+    if(ref.startsWith('XFEP_DMP_')){
+      if(hm['LAST_CONDITION'] && !getVal(row, hm, 'LAST_CONDITION')){
+        add('LAST_CONDITION','XOM-DMP-0001', '', 'FAIL', 'Client Ref XFEP_DMP_* jobs require Last Condition to be populated for all items');
+      }
+    }
+  }
+
+  // 5a. Foreign Language Document check (Foreign Language Documents tab) - WARN only, never FAIL,
+  // since wording variations are acceptable as long as the intent ("FOREIGN LANGUAGE") is present.
+  if(subKey === normKey('FOREIGN LANGUAGE DOCUMENT') && hm['DESCRIPTION']){
+    const desc = getVal(row, hm, 'DESCRIPTION').toUpperCase();
+    if(desc && !desc.includes('FOREIGN LANGUAGE')){
+      add('DESCRIPTION','XOM-FL-0001', getVal(row, hm, 'DESCRIPTION'), 'WARN', 'Sub-Category is FOREIGN LANGUAGE DOCUMENT - Description is expected to note "FOREIGN LANGUAGE"');
+    }
+  }
+
+  // 5b. (Removed: XOM-WL-0001, the old native Well Log/Wireline curve-content check, was redundant with
+  // the shared WellLog-Curve-Or-Unavailable-Required rule below, which now covers this for XOM too with
+  // more complete keyword matching. Removed to avoid duplicate/conflicting flags on the same Description.)
+
+  // 5. Out-of-Scope (OOS) checks for the DMP project: restricted countries, restricted items, restricted sources
+  // Check all three country fields — generic COUNTRY, Seismic Country, and Well Country
+  const countryFields = ['COUNTRY', 'SEISMIC_COUNTRY', 'WELL_COUNTRY'];
+  countryFields.forEach(fk => {
+    if(!hm[fk]) return;
+    const country = getVal(row, hm, fk);
+    if(country && OOS_COUNTRY_SET_XOM.has(normKey(country))){
+      add(fk,'XOM-OOS-0001', country, 'FAIL', 'Country is out-of-scope for the DMP project (Russia, Qatar, Indonesia, Malaysia)');
+    }
+  });
+
+  // Country blank check — at least one of Seismic Country or Well Country should be populated.
+  // Check Item Comments and Inventory Remarks for an UNAVAILABLE note before flagging.
+  // Also check whether ANY other row sharing this same KDM Item ID already has a country populated —
+  // if so, treat the whole item as covered rather than flagging rows individually.
+  const hasSeismicCountry = hm['SEISMIC_COUNTRY'] && getVal(row, hm, 'SEISMIC_COUNTRY');
+  const hasWellCountry    = hm['WELL_COUNTRY']    && getVal(row, hm, 'WELL_COUNTRY');
+  const eitherPresent = hm['SEISMIC_COUNTRY'] || hm['WELL_COUNTRY'];
+  const coveredBySiblingRowXOM = state.countryPresentItemIds && state.countryPresentItemIds.has(itemId);
+  if(!isDuplicateException && eitherPresent && !hasSeismicCountry && !hasWellCountry && !coveredBySiblingRowXOM){
+    const comments = hm['ITEM_COMMENTS'] ? getVal(row, hm, 'ITEM_COMMENTS').toUpperCase() : '';
+    const remarks  = hm['INVENTORY_REMARKS'] ? getVal(row, hm, 'INVENTORY_REMARKS').toUpperCase() : '';
+    const noted = /UNAVAILABLE[^;]*COUNTR/i.test(comments) || /UNAVAILABLE[^;]*COUNTR/i.test(remarks) ||
+                  comments.includes('UNAVAILABLE COUNTRY') || remarks.includes('UNAVAILABLE COUNTRY');
+    if(!noted){
+      add('SEISMIC_COUNTRY', 'Country-blank', '', 'REVIEW',
+        'Both Seismic Country and Well Country are blank — at least one should be populated. If genuinely unavailable, note it in Item Comments (e.g. "UNAVAILABLE COUNTRY")');
+    }
+  }
+  const oosTextFields = ['DESCRIPTION','SUB_CATEGORY','TITLE'];
+  oosTextFields.forEach(fk => {
+    if(!hm[fk]) return;
+    const val = getVal(row, hm, fk).toUpperCase();
+    if(OOS_ITEMS_XOM.some(item => val.includes(item))){
+      add(fk,'XOM-OOS-0002', getVal(row, hm, fk), 'REVIEW', 'Possible Reserves content - Reserves information is out-of-scope for the DMP project regardless of country and should not be indexed/loaded');
+    }
+  });
+  if(hm['SOURCE_REFERENCE']){
+    const srcVal = getVal(row, hm, 'SOURCE_REFERENCE').toUpperCase();
+    const matched = RESTRICTED_SOURCE_LIST_XOM.find(r => srcVal.includes(r));
+    if(matched){
+      add('SOURCE_REFERENCE','XOM-OOS-0003', getVal(row, hm, 'SOURCE_REFERENCE'), 'FAIL', 'Source matches a restricted entity (Pioneer/PXD, Denbury, Terraseis, or XTO) - do not attach; create/use a "KDM_" prefixed Survey, Seismic, Well, or Project instead');
+    }
+  }
+
+  // ---- Shared WELL LOG rules (also enforced in the GenV engine) ----
+  // LAS-DLIS-Must-Be-Blank: for Digital items with format LAS or DLIS, Title and Description must be blank
+  FORMAT_FORBIDDEN_CONTENT_RULES.forEach(rule => {
+    if(rule.ifCategory && catKey !== normKey(rule.ifCategory)) return;
+    const fmt = hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : '';
+    if(!rule.formats.some(v => normKey(v) === fmt)) return;
+    if(rule.exemptCombos && rule.exemptCombos.some(c => normKey(c.category) === catKey && normKey(c.subcategory) === subKey)) return;
+    rule.fields.forEach(fieldName => {
+      const key = Object.keys(FIELD_ALIASES_XOM).find(k => normHeader(k) === normHeader(fieldName)) || fieldName;
+      if(!hm[key]) return;
+      const val = getVal(row, hm, key);
+      if(val){
+        add(key, rule.id, val, rule.severity, rule.description);
+      }
+    });
+  });
+
+  // WellLog-Curve-Or-Unavailable-Required + Calibration-Requires-Verification
+  if(!isDuplicateException) CONDITIONAL_CONTENT_RULES.forEach(rule => {
+    if(catKey !== normKey(rule.ifCategory)) return;
+    if(rule.ifSubcategory){
+      const subList = Array.isArray(rule.ifSubcategory) ? rule.ifSubcategory : [rule.ifSubcategory];
+      if(!subList.some(s => normKey(s) === subKey)) return;
+    }
+    if(rule.excludeSubcategory){
+      const exList = Array.isArray(rule.excludeSubcategory) ? rule.excludeSubcategory : [rule.excludeSubcategory];
+      if(exList.some(s => normKey(s) === subKey)) return;
+    }
+    const fmt = hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : '';
+    if(rule.exemptFormats && fmt && rule.exemptFormats.some(v => normKey(v) === fmt)) return;
+    if(rule.onlyFormats && (!fmt || !rule.onlyFormats.some(v => normKey(v) === fmt))) return;
+    const key = Object.keys(FIELD_ALIASES_XOM).find(k => normHeader(k) === normHeader(rule.field)) || rule.field;
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    const isZipWireline = rule.id === 'WellLog-Curve-Or-Unavailable-Required' && subKey === normKey('WIRELINE') && fmt === normKey('ZIP');
+    const effectiveSeverity = isZipWireline ? 'REVIEW' : rule.severity;
+    if(!val){
+      add(key, rule.id, '', effectiveSeverity, rule.description + ' (field is blank)');
+      return;
+    }
+    if(!rule.keywords) return;
+    const upper = val.toUpperCase();
+    const hasNamedCurveOrPhrase = rule.keywords.some(kw => upper.includes(kw));
+    const flexibleWords = ['UNAVAILABLE','NO','PRIORITY','CURVES'];
+    const flexibleWordCount = flexibleWords.filter(w => new RegExp('\\b'+w+'\\b').test(upper)).length;
+    const hasUnavailableStatement = rule.id === 'WellLog-Curve-Or-Unavailable-Required' && flexibleWordCount >= 2;
+    let hasKeyword = hasNamedCurveOrPhrase || hasUnavailableStatement;
+    if(!hasKeyword && rule.id === 'WellLog-Curve-Or-Unavailable-Required'){
+      // Comments/Remarks fallback: "CURVES" is mandatory, plus at least one of Unavailable/No/Priority
+      // alongside it (e.g. "Curves Unavailable", "No Curves", "Curves - Priority not determined").
+      const checkAltText = text => {
+        if(!text) return false;
+        const named = rule.keywords.some(kw => text.includes(kw));
+        const hasCurves = /\bCURVES\b/.test(text);
+        const hasOtherWord = ['UNAVAILABLE','NO','PRIORITY'].some(w => new RegExp('\\b'+w+'\\b').test(text));
+        return named || (hasCurves && hasOtherWord);
+      };
+      const commentsVal = hm['ITEM_COMMENTS'] ? getVal(row, hm, 'ITEM_COMMENTS').toUpperCase() : '';
+      const remarksVal  = hm['INVENTORY_REMARKS'] ? getVal(row, hm, 'INVENTORY_REMARKS').toUpperCase() : '';
+      if(checkAltText(commentsVal) || checkAltText(remarksVal)) hasKeyword = true;
+    }
+    if(!hasKeyword){
+      const reasonSuffix = rule.id === 'WellLog-Curve-Or-Unavailable-Required'
+        ? ' (no usable curve named, and fewer than two of Unavailable/No/Priority/Curves found in Description, Comments, or Remarks)'
+        : ' (required keyword not found in Description)';
+      add(key, rule.id, val, effectiveSeverity, rule.description + reasonSuffix);
+    }
+  });
+
+  return exs;
+}
+
+/* Format/extension equivalences: a Digital Format may legitimately show up under a different
+   file extension. Used ONLY to suggest a likely real format when Digital Format is UNKNOWN -
+   it is never used to flag a mismatch when the format is already a known, valid value. */
+const EXTENSION_TO_FORMAT_GUESS = {
+  'DOCX': ['DOC'],
+  'AVF': ['ASCII'],
+  'ASC': ['ASCII'],
+  'DAT': ['SEGY'],
+  'ED50': ['UKOOA'],
+  '3220': ['P190'],
+  '1370N': ['P190'],
+  '1426': ['P190'],
+  'MIG': ['ASCII','SEGY']
+};
+
+/* Duplicate-group rules: rows sharing the same normalized key (filename or title) but with
+   different Category/Sub-Category are flagged, excluding rows where Digital Format = P211. */
+const DUPLICATE_GROUP_RULES = [
+  { id: 'Duplicate-Filename-Different-Category', description: 'Same or similar Original File Name but different Category/Sub-Category (P211 excluded)', keyField: 'ORIGINAL_FILE_NAME' },
+  { id: 'Duplicate-Title-Different-Category', description: 'Same or similar Title but different Category/Sub-Category (P211 excluded)', keyField: 'TITLE' }
+];
+
+function normalizeKeyValue(v){
+  // Exact filename match — case-insensitive only.
+  // The extension is part of what makes a filename unique:
+  // 22_27a_1.chk and 22_27a_1.lst are different files, not duplicates.
+  // Only strip invisible/zero-width characters and normalise case.
+  return String(v||'').trim().toUpperCase().replace(/[\u200b\u200c\u200d\ufeff]+/g,'');
+}
+
+function runDuplicateGroupChecks(){
+  const hm = state.headerMap;
+  const dupExceptions = [];
+  DUPLICATE_GROUP_RULES.forEach(rule => {
+    const key = ALIAS_KEY_BY_NORM_HEADER.get(normHeader(rule.keyField)) || rule.keyField;
+    if(!hm[key]) return; // column not present in export, skip
+    const hasBarcode = !!hm['KDM_BARCODE'];
+    const groups = {};
+    state.rows.forEach((row, idx) => {
+      if(hm['DIGITAL_FORMAT'] && normKey(getVal(row, hm, 'DIGITAL_FORMAT')) === normKey('P211')) return; // P211 excluded
+      if(hm['EXCEPTION_CODE'] && normKey(getVal(row, hm, 'EXCEPTION_CODE')) === normKey('DUPLICATE')) return; // already documented as a known duplicate, don't re-flag
+      if(DUPLICATE_EXEMPT_CATEGORIES.has(normKey(getVal(row, hm, 'CATEGORY')))) return; // exempt categories skip duplicate checks
+      const val = getVal(row, hm, key);
+      if(!val) return;
+      const k = normalizeKeyValue(val);
+      if(!k) return;
+      (groups[k] = groups[k] || []).push({idx, row, val});
+    });
+    Object.values(groups).forEach(members => {
+      if(members.length < 2) return;
+      // If Barcode is available, a matching filename/title with a DIFFERENT barcode is evidence
+      // they're genuinely different files (e.g. generic names like "VOL1.SGY" reused across media) -
+      // so only compare members that also share the same barcode. Members with a blank barcode
+      // can't be ruled out either way, so they're kept in their own "unknown barcode" bucket.
+      const barcodeBuckets = {};
+      members.forEach(m => {
+        const bc = hasBarcode ? normKey(getVal(m.row, hm, 'KDM_BARCODE')) : '';
+        (barcodeBuckets[bc] = barcodeBuckets[bc] || []).push(m);
+      });
+      Object.values(barcodeBuckets).forEach(bucket => {
+        if(bucket.length < 2) return;
+        const combos = new Set(bucket.map(m => normKey(getVal(m.row, hm, 'CATEGORY')) + '|' + normKey(getVal(m.row, hm, 'SUB_CATEGORY'))));
+        if(combos.size > 1){
+          bucket.forEach(m => {
+            const cat = getVal(m.row, hm, 'CATEGORY'), sub = getVal(m.row, hm, 'SUB_CATEGORY');
+            const itemId = getVal(m.row, hm, 'KDM_ITEM_ID') || (m.idx+1);
+            const qcName = getVal(m.row, hm, 'QC_NAME');
+            const jobNumber = getVal(m.row, hm, 'JOB_NUMBER');
+            const digitalFormat = getVal(m.row, hm, 'DIGITAL_FORMAT');
+            dupExceptions.push({row: m.idx+2, itemId, qcName, jobNumber, category: cat, sub, digitalFormat, field: key, rule: rule.id, actual: m.val, severity: 'REVIEW', reason: rule.description});
+          });
+        }
+      });
+    });
+  });
+
+  // DG-0003 (exact-fingerprint duplicate check) was removed - the export data available doesn't
+  // reliably distinguish genuinely different items from true duplicates (e.g. plot pages/sections
+  // sharing a generic file name but covering different content), producing too many false positives.
+
+  return dupExceptions;
+}
+
+function runQCWithStatus(){
+  const status = document.getElementById('runStatus');
+  const runBtn = document.getElementById('runBtn');
+  status.style.display = 'block';
+  runBtn.disabled = true;
+  // setTimeout lets the browser paint the "Running..." message before the (synchronous) QC pass runs
+  setTimeout(() => {
+    try {
+      runQC();
+    } finally {
+      status.style.display = 'none';
+      runBtn.disabled = false;
+    }
+  }, 30);
+}
+
+function renderTopIssues(){
+  const panel = document.getElementById('topIssuesPanel');
+  const list = document.getElementById('topIssuesList');
+  if(state.exceptions.length === 0){ panel.style.display = 'none'; return; }
+  const counts = {};
+  state.exceptions.forEach(e => {
+    const k = e.rule + '|' + e.severity;
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  const max = entries.length ? entries[0][1] : 1;
+  const colorFor = sev => sev === 'FAIL' ? 'var(--bad)' : (sev === 'WARN' ? 'var(--warn)' : 'var(--review)');
+  list.innerHTML = entries.map(([k, count]) => {
+    const [rule, sev] = k.split('|');
+    const pct = Math.max(4, Math.round(count / max * 100));
+    return '<div class="issue-row"><div class="issue-label" title="'+rule+'">'+rule+' ('+sev+')</div><div class="issue-bar-track"><div class="issue-bar-fill" style="width:'+pct+'%;background:'+colorFor(sev)+'"></div></div><div class="issue-count">'+count.toLocaleString()+'</div></div>';
+  }).join('');
+  panel.style.display = 'block';
+}
+
+// Scans every row once to find which KDM Item IDs have Seismic Country or Well Country populated
+// in AT LEAST ONE of their rows. A KDM Item ID can appear on multiple rows (one per piece of media);
+// the Country-blank check should treat the item as "has country" if any of its rows do, rather than
+// flagging rows individually when a sibling row already has the information.
+function computeItemIdsWithCountry(){
+  const hm = state.headerMap;
+  const withCountry = new Set();
+  state.rows.forEach(row => {
+    const itemId = getVal(row, hm, 'KDM_ITEM_ID');
+    if(!itemId) return;
+    const hasSeismic = hm['SEISMIC_COUNTRY'] && getVal(row, hm, 'SEISMIC_COUNTRY');
+    const hasWell = hm['WELL_COUNTRY'] && getVal(row, hm, 'WELL_COUNTRY');
+    if(hasSeismic || hasWell) withCountry.add(itemId);
+  });
+  return withCountry;
+}
+
+// Cross-checks the optional ODIDB export against the main iGlass export, by Original File Name.
+// - If an ODIDB filename isn't found anywhere in iGlass at all: FAIL (media may not be indexed at all).
+// - If found: that alone means the item is indexed and present - it passes. Whether it's fully
+//   "loaded"/archived yet is already covered separately by the existing Unarchived-Requires-Exception-Code
+//   rule, so this check does NOT re-flag that here.
+// - The one remaining concern once a filename is matched: if that SAME Original File Name (exact,
+//   including extension) maps to more than one DIFFERENT KDM Item ID in iGlass under the same
+//   Digital Format - that's a real conflict worth flagging.
+function runOdidbCrossCheck(){
+  const results = [];
+  if(!state.odidbRows || state.odidbRows.length === 0) return results;
+  if(!state.odidbFilenameCol) return results;
+  const hm = state.headerMap;
+  if(!hm['ORIGINAL_FILE_NAME']) return results; // main export has no Original File Name column to match against
+
+  // Strips any directory path before comparing - ODIDB sometimes stores the full path
+  // (e.g. "/seismic1/staging/5486850/RODE2KQ/H021282839/FLD_TCY-327_8838"), while iGlass only
+  // ever has the bare file name. Handles both forward slashes and backslashes.
+  const norm = s => {
+    let v = String(s || '').trim().toUpperCase();
+    const lastSlash = Math.max(v.lastIndexOf('/'), v.lastIndexOf('\\'));
+    if(lastSlash !== -1) v = v.slice(lastSlash + 1);
+    return v;
+  };
+
+  // Group iGlass rows by normalized filename, so we can see every KDM Item ID tied to each name.
+  const iglassByName = new Map();
+  state.rows.forEach(row => {
+    const name = norm(getVal(row, hm, 'ORIGINAL_FILE_NAME'));
+    if(!name) return;
+    const itemId = getVal(row, hm, 'KDM_ITEM_ID');
+    if(!iglassByName.has(name)) iglassByName.set(name, []);
+    iglassByName.get(name).push({ row, itemId });
+  });
+
+  const flaggedNames = new Set(); // avoid flagging the same filename group more than once
+
+  state.odidbRows.forEach((orow, idx) => {
+    const rawName = orow[state.odidbFilenameCol];
+    const name = norm(rawName);
+    if(!name) return; // skip ODIDB rows with no filename at all
+
+    const matches = iglassByName.get(name);
+    if(!matches || matches.length === 0){
+      results.push({
+        row: idx+2, itemId: rawName, qcName: '', jobNumber: '', category: '', sub: '', digitalFormat: '',
+        field: 'ORIGINAL_FILE_NAME', rule: 'ODIDB-Filename-Not-In-iGlass', actual: rawName, severity: 'FAIL',
+        odidbOnly: true,
+        reason: 'This Original File Name appears in the ODIDB export but was not found anywhere in the iGlass export - the media may not have been indexed at all.'
+      });
+      return;
+    }
+
+    if(flaggedNames.has(name)) return; // already flagged this filename's multi-ID conflict once
+    // Group this filename's matches by Digital Format - it's normal for the same filename to map to
+    // different KDM Item IDs when the format differs (e.g. a raw RODE file and its converted SEGY
+    // version legitimately share a base filename). The real conflict is when the SAME filename AND
+    // SAME format map to more than one different KDM Item ID.
+    const byFormat = new Map();
+    matches.forEach(m => {
+      const fmt = normKey(getVal(m.row, hm, 'DIGITAL_FORMAT'));
+      if(!byFormat.has(fmt)) byFormat.set(fmt, new Set());
+      if(m.itemId) byFormat.get(fmt).add(m.itemId);
+    });
+    for(const [fmt, ids] of byFormat){
+      if(ids.size > 1){
+        flaggedNames.add(name);
+        const first = matches.find(m => normKey(getVal(m.row, hm, 'DIGITAL_FORMAT')) === fmt).row;
+        results.push({
+          row: idx+2, itemId: Array.from(ids).join(' | '),
+          qcName: getVal(first, hm, 'QC_NAME'), jobNumber: getVal(first, hm, 'JOB_NUMBER'),
+          category: getVal(first, hm, 'CATEGORY'), sub: getVal(first, hm, 'SUB_CATEGORY'),
+          digitalFormat: getVal(first, hm, 'DIGITAL_FORMAT'),
+          field: 'ORIGINAL_FILE_NAME', rule: 'ODIDB-Filename-Multiple-KDM-IDs', actual: rawName, severity: 'WARN',
+          reason: 'This Original File Name, with the same Digital Format ('+getVal(first, hm, 'DIGITAL_FORMAT')+'), is matched to '+ids.size+' different KDM Item IDs in iGlass: ' + Array.from(ids).join(', ')
+        });
+        break; // one flag per filename is enough even if multiple formats had conflicts
+      }
+    }
+    // Otherwise: matched cleanly (including cases where different formats legitimately share a filename) - no flag.
+  });
+
+  return results;
+}
+
+function runQC(){
+  state.countryPresentItemIds = computeItemIdsWithCountry();
+  const exceptions = [];
+  if(state.client === 'XOM'){
+    state.rows.forEach((row, idx) => { exceptions.push(...checkRowXOM(row, idx)); });
+    exceptions.push(...runDuplicateGroupChecks());
+  } else {
+    state.rows.forEach((row, idx) => { exceptions.push(...checkRowGENV(row, idx)); });
+    exceptions.push(...runDuplicateGroupChecks());
+  }
+  exceptions.push(...runOdidbCrossCheck());
+  // Deduplicate — same item + field + rule should never appear more than once.
+  // Key uses KDM Item ID (not row number) so the same item appearing on multiple
+  // export rows (multi-media items) only generates one flag per issue, not one per row.
+  const seen = new Set();
+  state.exceptions = exceptions.filter(e => {
+    const key = `${e.itemId}|${e.field}|${e.rule}`;
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Add one PASS entry per item that had zero issues, so the report shows verification that
+  // every row was actually checked - not just the ones with problems. Uses KDM Item ID (like the
+  // dedup above) so a single item appearing on multiple export rows only gets one PASS entry.
+  const hm = state.headerMap;
+  const flaggedItemIds = new Set(state.exceptions.map(e => String(e.itemId)));
+  const passedItemIds = new Set();
+  state.rows.forEach((row, idx) => {
+    const itemId = getVal(row, hm, 'KDM_ITEM_ID') || (idx+1);
+    const key = String(itemId);
+    if(flaggedItemIds.has(key) || passedItemIds.has(key)) return;
+    passedItemIds.add(key);
+    state.exceptions.push({
+      row: idx+2, itemId,
+      qcName: getVal(row, hm, 'QC_NAME'), jobNumber: getVal(row, hm, 'JOB_NUMBER'),
+      category: getVal(row, hm, 'CATEGORY'), sub: getVal(row, hm, 'SUB_CATEGORY'),
+      digitalFormat: getVal(row, hm, 'DIGITAL_FORMAT'),
+      field: '', rule: '', actual: '', severity: 'PASS',
+      reason: 'No issues found — all checks passed.'
+    });
+  });
+
+  const totalRows = state.rows.length;
+  // Compute each row's worst severity in a single pass, instead of rescanning the whole
+  // exceptions array once per WARN/REVIEW entry. On real production files with tens of
+  // thousands of exceptions, the old .some()-per-item approach was effectively O(n^2) and
+  // could lock up the tab for minutes; this is O(n).
+  const _sevRank = { FAIL: 3, WARN: 2, REVIEW: 1 };
+  const _worstByRow = new Map();
+  exceptions.forEach(e => {
+    const rank = _sevRank[e.severity] || 0;
+    if(rank === 0) return; // PASS entries don't affect the worst-severity-per-row calc
+    const cur = _worstByRow.get(e.row) || 0;
+    if(rank > cur) _worstByRow.set(e.row, rank);
+  });
+  let failRows = 0, warnRows = 0, reviewRows = 0;
+  _worstByRow.forEach(rank => {
+    if(rank === 3) failRows++;
+    else if(rank === 2) warnRows++;
+    else if(rank === 1) reviewRows++;
+  });
+  const passRows = Math.max(0, totalRows - _worstByRow.size);
+
+  document.getElementById('statTotal').textContent = totalRows.toLocaleString();
+  document.getElementById('statPass').textContent = passRows.toLocaleString();
+  document.getElementById('statReview').textContent = reviewRows.toLocaleString();
+  document.getElementById('statWarn').textContent = warnRows.toLocaleString();
+  document.getElementById('statFail').textContent = failRows.toLocaleString();
+
+  const bar = document.getElementById('statBar');
+  const p = totalRows? passRows/totalRows*100:0, rv = totalRows? reviewRows/totalRows*100:0, w = totalRows? warnRows/totalRows*100:0, f = totalRows? failRows/totalRows*100:0;
+  bar.innerHTML = '<span style="width:'+p+'%;background:var(--good)"></span><span style="width:'+rv+'%;background:var(--review)"></span><span style="width:'+w+'%;background:var(--warn)"></span><span style="width:'+f+'%;background:var(--bad)"></span>';
+
+  renderTopIssues();
+  renderExceptions();
+  document.getElementById('downloadAnnotatedBtn').disabled = exceptions.length === 0;
+}
+
+// Sorts the flat per-issue exception list by severity, worst first (FAIL, then WARN, then REVIEW).
+// Each issue keeps its own row and its own severity - nothing is grouped or merged together.
+function sortBySeverity(list){
+  const rank = { FAIL: 3, WARN: 2, REVIEW: 1, PASS: 0 };
+  return list.slice().sort((a, b) => (rank[b.severity]||0) - (rank[a.severity]||0));
+}
+
+function renderExceptions(){
+  const filterText = document.getElementById('filterText').value.toLowerCase();
+  const filterSev = document.getElementById('filterSeverity').value;
+  const sorted = sortBySeverity(state.exceptions);
+  let list = sorted;
+  if(filterSev) list = list.filter(e => e.severity === filterSev);
+  if(filterText) list = list.filter(e => Object.values(e).some(v => String(v).toLowerCase().includes(filterText)));
+  document.getElementById('exceptionCount').textContent = list.length.toLocaleString() + ' of ' + sorted.length.toLocaleString() + ' rows shown';
+  const body = document.getElementById('exceptionBody');
+  if(list.length === 0){
+    body.innerHTML = '<tr><td colspan="12" class="empty">No issues match the current filter.</td></tr>';
+    return;
+  }
+  body.innerHTML = list.slice(0,500).map(e => {
+    const rowClass = e.severity === 'FAIL' ? 'row-fail' : (e.severity === 'WARN' ? 'row-warn' : '');
+    return '<tr class="'+rowClass+'"><td>'+e.row+'</td><td>'+e.itemId+'</td><td>'+(e.qcName||'')+'</td><td>'+(e.jobNumber||'')+'</td><td>'+e.category+'</td><td>'+e.sub+'</td><td>'+(e.digitalFormat||'')+'</td><td>'+e.field.replace(/_/g,' ')+'</td><td>'+e.rule+'</td><td>'+String(e.actual).replace(/</g,'&lt;')+'</td><td><span class="pill '+e.severity+'">'+e.severity+'</span></td><td>'+e.reason+'</td></tr>';
+  }).join('');
+}
+
+function toCSV(rows){
+  const esc = v => { v = v==null?'':String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  return rows.map(r=>r.map(esc).join(',')).join('\n');
+}
+
+function downloadCSV(){
+  const sorted = sortBySeverity(state.exceptions);
+  const rows = [['Row','KDM Item ID','QC Name','Job Number','Category','Sub-Category','Digital Format','Field','Rule','Actual','Severity','Reason']]
+    .concat(sorted.map(e=>[e.row,e.itemId,e.qcName,e.jobNumber,e.category,e.sub,e.digitalFormat,e.field,e.rule,e.actual,e.severity,e.reason]));
+  const blob = new Blob([toCSV(rows)], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'qc_issues_report.csv'; a.click();
+}
+
+// Returns the original uploaded file, exactly as it was, with two extra columns added at the end
+// (QC Result, QC Issues Found) and each row highlighted by severity - so results can be worked
+// directly against the real file instead of a separate issues list.
+async function downloadAnnotatedOriginal(){
+  const hm = state.headerMap;
+  const rank = { FAIL: 3, WARN: 2, REVIEW: 1, PASS: 0 };
+  const byItemId = new Map();
+  state.exceptions.forEach(e => {
+    const key = String(e.itemId);
+    if(!byItemId.has(key)) byItemId.set(key, { severity: e.severity, reasons: [], fields: [] });
+    const g = byItemId.get(key);
+    if((rank[e.severity]||0) > (rank[g.severity]||0)) g.severity = e.severity;
+    if(e.severity !== 'PASS'){
+      g.reasons.push('['+e.severity+'] '+(e.field ? e.field.replace(/_/g,' ')+': ' : '')+e.reason);
+      // Keep the individual field so the exact cell can be highlighted, not just the row.
+      if(e.field) g.fields.push({ field: e.field, severity: e.severity, reason: e.reason });
+    }
+  });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('QC Results');
+  const headers = state.rawHeaders.concat(['QC Result','QC Issues Found']);
+  ws.addRow(headers);
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getRow(1).eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2D50' } }; });
+
+  // Row-level tint: pale, so a whole row reads as "needs attention" at a glance and stays easy to
+  // scan or filter by the QC Result column.
+  const fillFor = sev => sev === 'FAIL' ? 'FFFCE4E4' : (sev === 'WARN' ? 'FFFFF3CD' : (sev === 'REVIEW' ? 'FFEAE6FB' : 'FFE6F7EC'));
+  const fontFor = sev => sev === 'FAIL' ? 'FFCC0000' : (sev === 'WARN' ? 'FF8A6D00' : (sev === 'REVIEW' ? 'FF5B3FBF' : 'FF1F7A44'));
+  // Cell-level: a deep saturated fill marking the exact field that caused the flag. Chosen to stand
+  // out against its own pale row tint, its clean neighbours, and the pale green PASS rows elsewhere.
+  const cellFillFor = sev => sev === 'FAIL' ? 'FFC0392B' : (sev === 'WARN' ? 'FFD98C00' : 'FF6D4FA8');
+  const cellFontFor = sev => sev === 'WARN' ? 'FF1A1A1A' : 'FFFFFFFF';
+  const thinBorder = { top:{style:'thin',color:{argb:'FF404040'}}, left:{style:'thin',color:{argb:'FF404040'}},
+                       bottom:{style:'thin',color:{argb:'FF404040'}}, right:{style:'thin',color:{argb:'FF404040'}} };
+
+  // Maps a rule's field key (e.g. SAMPLE_RATE) back to its column number in the uploaded file.
+  // Returns -1 for findings that aren't tied to one column (duplicates, ODIDB, Name+ID pair checks) -
+  // those keep the row tint only, since there is no single cell to point at.
+  const colIndexForField = fieldKey => {
+    const header = hm[fieldKey];
+    if(!header) return -1;
+    const i = state.rawHeaders.indexOf(header);
+    return i >= 0 ? i + 1 : -1;   // ExcelJS columns are 1-based
+  };
+
+  state.rows.forEach((rowData, idx) => {
+    const itemId = getVal(rowData, hm, 'KDM_ITEM_ID') || (idx+1);
+    const g = byItemId.get(String(itemId)) || { severity: 'PASS', reasons: [], fields: [] };
+    const originalValues = state.rawHeaders.map(h => (rowData[h] !== undefined && rowData[h] !== null) ? rowData[h] : '');
+    const issuesText = g.reasons.length ? g.reasons.join(' | ') : 'No issues found — all checks passed.';
+    const row = ws.addRow(originalValues.concat([g.severity, issuesText]));
+    const fill = fillFor(g.severity);
+    row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } }; });
+    const sevCell = row.getCell(headers.length - 1);
+    sevCell.font = { bold: true, color: { argb: fontFor(g.severity) } };
+
+    // Highlight the specific problem cells. Group by column first so a field with more than one
+    // issue gets a single combined hover note rather than only the last one.
+    const byCol = new Map();
+    (g.fields || []).forEach(f => {
+      const col = colIndexForField(f.field);
+      if(col < 0) return;
+      if(!byCol.has(col)) byCol.set(col, { severity: f.severity, notes: [] });
+      const info = byCol.get(col);
+      if((rank[f.severity]||0) > (rank[info.severity]||0)) info.severity = f.severity;
+      info.notes.push(f.severity + ': ' + f.reason);
+    });
+    byCol.forEach((info, col) => {
+      const cell = row.getCell(col);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: cellFillFor(info.severity) } };
+      cell.font = { bold: true, color: { argb: cellFontFor(info.severity) } };
+      cell.border = thinBorder;
+      cell.note = info.notes.join('\n\n');
+    });
+  });
+
+  // ODIDB findings for files that are NOT in the iGlass export have no row to highlight - by
+  // definition, that row doesn't exist. Append them at the bottom so they aren't silently lost,
+  // with the filename shown in the Original File Name column where one exists.
+  const odidbOnly = state.exceptions.filter(e => e.odidbOnly);
+  if(odidbOnly.length){
+    ws.addRow([]);
+    const headerIdx = state.rawHeaders.findIndex(h => /ORIGINAL[_\s]*FILE[_\s]*NAME/i.test(h));
+    const noteRow = ws.addRow(['NOT FOUND IN THIS EXPORT — listed in ODIDB only']);
+    noteRow.getCell(1).font = { bold: true, color: { argb: 'FFCC0000' } };
+    odidbOnly.forEach(e => {
+      const values = state.rawHeaders.map(() => '');
+      if(headerIdx >= 0) values[headerIdx] = e.actual;
+      const row = ws.addRow(values.concat([e.severity, '['+e.severity+'] '+e.reason]));
+      row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillFor(e.severity) } }; });
+      const sevCell = row.getCell(headers.length - 1);
+      sevCell.font = { bold: true, color: { argb: fontFor(e.severity) } };
+    });
+  }
+
+  // Turn on filter dropdowns across every column and set sensible widths, so the report can be
+  // sorted and filtered straight away without the user setting it up each time.
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+  ws.columns.forEach((col, i) => {
+    const isLastTwo = i >= headers.length - 2;
+    col.width = isLastTwo ? (i === headers.length - 1 ? 70 : 12) : 18;
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'QC_Tool_results.xlsx'; a.click();
+}
+
+/* ===================== Events ===================== */
+function clearAllData(){
+  state.rows = []; state.rawHeaders = []; state.headerMap = {}; state.exceptions = [];
+  state.odidbRows = []; state.odidbFilenameCol = null;
+  document.getElementById('dataFile').value = '';
+  document.getElementById('fileInfo').textContent = '';
+  document.getElementById('odidbFile').value = '';
+  document.getElementById('odidbFileInfo').textContent = '';
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('downloadAnnotatedBtn').disabled = true;
+  document.getElementById('topIssuesPanel').style.display = 'none';
+  document.getElementById('statTotal').textContent = '–';
+  document.getElementById('statPass').textContent = '–';
+  document.getElementById('statReview').textContent = '–';
+  document.getElementById('statWarn').textContent = '–';
+  document.getElementById('statFail').textContent = '–';
+  document.getElementById('statBar').innerHTML = '';
+  document.getElementById('exceptionBody').innerHTML = '<tr><td colspan="12" class="empty">Upload a data export and run QC to see issues here.</td></tr>';
+  document.getElementById('exceptionCount').textContent = '';
+  document.getElementById('filterText').value = '';
+  document.getElementById('filterSeverity').value = '';
+}
+
+document.getElementById('clientSelect').addEventListener('change', e => {
+  state.client = e.target.value;
+  // Reset all loaded data/results when switching clients - the two rulesets are fully independent
+  clearAllData();
+  updateClientUI();
+});
+updateClientUI();
+document.getElementById('dataFile').addEventListener('change', e => { if(e.target.files[0]) loadDataFile(e.target.files[0]); });
+document.getElementById('odidbFile').addEventListener('change', e => { if(e.target.files[0]) loadOdidbFile(e.target.files[0]); });
+document.getElementById('runBtn').addEventListener('click', runQCWithStatus);
+document.getElementById('downloadAnnotatedBtn').addEventListener('click', downloadAnnotatedOriginal);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if(confirm('Clear the loaded file and all results? This cannot be undone.')) clearAllData();
+});
+document.getElementById('filterText').addEventListener('input', renderExceptions);
+document.getElementById('filterSeverity').addEventListener('change', renderExceptions);
+</script>
+<script>
+function tryUnlockAdmin(){
+  const input = document.getElementById('adminPinInput').value.trim();
+  const msg   = document.getElementById('adminBarMsg');
+  if(input === ADMIN_PIN){
+    document.getElementById('adminPanel').style.display = 'block';
+    document.getElementById('adminPanel').scrollIntoView({behavior:'smooth', block:'start'});
+    document.getElementById('adminPinInput').value = '';
+    document.getElementById('adminBar').style.borderTopColor = '#3ddc97';
+    msg.style.color = '#3ddc97';
+    msg.textContent = 'Admin panel unlocked.';
+    setTimeout(()=>{ msg.textContent=''; document.getElementById('adminBar').style.borderTopColor=''; }, 3000);
+  } else {
+    msg.style.color = '#ff7a7a';
+    msg.textContent = 'Incorrect PIN.';
+    document.getElementById('adminPinInput').value = '';
+    setTimeout(()=>{ msg.textContent=''; }, 2500);
+  }
+}
+function lockAdmin(){
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('adminBarMsg').textContent = '';
+  document.getElementById('adminPinInput').value = '';
+  document.getElementById('adminBar').style.borderTopColor = '';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+document.getElementById('adminPinInput').addEventListener('keydown', e => {
+  if(e.key === 'Enter') tryUnlockAdmin();
+});
+</script>
+</body>
+</html>
