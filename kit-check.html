@@ -2759,15 +2759,14 @@ function checkRowGENV(row, idx){
   }
 
   // PROCESSED (excluding SECTION, which has its own separate document-format rule) - Sample Type,
-  // Title, First TRC, Last TRC, Sample Rate, Record Length. FAIL if Digital Format is SEGY and
-  // blank (unchanged from before). REVIEW if Digital Format is anything else and blank - real
-  // production data showed many false FAILs, since non-SEGY processed data often genuinely
-  // doesn't expose this information in a readable way. Confirmed with Roy, August 2026.
+  // First TRC, Last TRC, Sample Rate, Record Length. FAIL if Digital Format is SEGY and blank
+  // (unchanged from before). REVIEW if Digital Format is anything else and blank - real production
+  // data showed many false FAILs, since non-SEGY processed data often genuinely doesn't expose
+  // this information in a readable way. Confirmed with Roy, August 2026.
   if(!isDuplicateException && normKey(cat) === normKey('PROCESSED') && normKey(sub) !== normKey('SECTION')){
     const _isSegyProcessed = fmt === normKey('SEGY');
     [
       ['SAMPLE_TYPE', 'Sample Type', ['SAMPLE TYPE','SAMPLETYPE']],
-      ['TITLE', 'Title', ['TITLE']],
       ['FIRST_TRC', 'First TRC', ['FIRST TRC','FTRC','FTRACE']],
       ['LAST_TRC', 'Last TRC', ['LAST TRC','LTRC','LTRACE']],
       ['SAMPLE_RATE', 'Sample Rate', ['SAMPLE RATE','SR']],
@@ -2785,6 +2784,18 @@ function checkRowGENV(row, idx){
         }
       }
     });
+    // Title is always REVIEW for PROCESSED, regardless of format - unlike the technical/
+    // geophysical fields above, Title being blank on an otherwise-complete SEGY record doesn't
+    // necessarily indicate a genuine problem, so it never hard-FAILs here. Confirmed with Roy
+    // after real production SEGY/AVO records showed correct FAILs on the other 5 fields but an
+    // unwanted FAIL on Title specifically.
+    if(hm['TITLE']){
+      const titleVal = getVal(row, hm, 'TITLE');
+      if(!titleVal && !isNotedUnavailable(row, hm, ['TITLE'])){
+        add('TITLE', 'Processed-Title-Review', '', 'REVIEW',
+          'Title is blank — required for PROCESSED, but does not fail regardless of Digital Format');
+      }
+    }
   }
 
   // Geophysical completeness checks (new for KIT Check)
@@ -2863,7 +2874,7 @@ function checkRowXOM(row, idx){
   // Skipped entirely for LAS or DLIS format (any category/sub-category), since LAS-DLIS-Must-Be-Blank already
   // requires Title to be blank there — no explanation needed for something that's supposed to be blank.
   const isLasDlisXOM = catKey === normKey('WELL LOG') && ['LAS','DLIS'].some(f => normKey(f) === (hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : ''));
-  if(!isDuplicateException && hm['TITLE'] && !isLasDlisXOM){
+  if(!isDuplicateException && hm['TITLE'] && !isLasDlisXOM && catKey !== normKey('PROCESSED')){
     const titleVal = getVal(row, hm, 'TITLE');
     if(!titleVal){
       const descVal  = hm['DESCRIPTION']       ? getVal(row, hm, 'DESCRIPTION').toUpperCase()       : '';
@@ -3214,15 +3225,14 @@ function checkRowXOM(row, idx){
   }
 
   // PROCESSED (excluding SECTION, which has its own separate document-format rule) - Sample Type,
-  // Title, First TRC, Last TRC, Sample Rate, Record Length. FAIL if Digital Format is SEGY and
-  // blank (unchanged from before). REVIEW if Digital Format is anything else and blank - real
-  // production data showed many false FAILs, since non-SEGY processed data often genuinely
-  // doesn't expose this information in a readable way. Confirmed with Roy, August 2026.
+  // First TRC, Last TRC, Sample Rate, Record Length. FAIL if Digital Format is SEGY and blank
+  // (unchanged from before). REVIEW if Digital Format is anything else and blank - real production
+  // data showed many false FAILs, since non-SEGY processed data often genuinely doesn't expose
+  // this information in a readable way. Confirmed with Roy, August 2026.
   if(!isDuplicateException && normKey(cat) === normKey('PROCESSED') && normKey(sub) !== normKey('SECTION')){
     const _isSegyProcessed = fmt === normKey('SEGY');
     [
       ['SAMPLE_TYPE', 'Sample Type', ['SAMPLE TYPE','SAMPLETYPE']],
-      ['TITLE', 'Title', ['TITLE']],
       ['FIRST_TRC', 'First TRC', ['FIRST TRC','FTRC','FTRACE']],
       ['LAST_TRC', 'Last TRC', ['LAST TRC','LTRC','LTRACE']],
       ['SAMPLE_RATE', 'Sample Rate', ['SAMPLE RATE','SR']],
@@ -3240,6 +3250,18 @@ function checkRowXOM(row, idx){
         }
       }
     });
+    // Title is always REVIEW for PROCESSED, regardless of format - unlike the technical/
+    // geophysical fields above, Title being blank on an otherwise-complete SEGY record doesn't
+    // necessarily indicate a genuine problem, so it never hard-FAILs here. Confirmed with Roy
+    // after real production SEGY/AVO records showed correct FAILs on the other 5 fields but an
+    // unwanted FAIL on Title specifically.
+    if(hm['TITLE']){
+      const titleVal = getVal(row, hm, 'TITLE');
+      if(!titleVal && !isNotedUnavailable(row, hm, ['TITLE'])){
+        add('TITLE', 'Processed-Title-Review', '', 'WARN',
+          'Title is blank — required for PROCESSED, but does not fail regardless of Digital Format');
+      }
+    }
   }
 
   // XOM-specific rules from the IQC governance table, confirmed with Roy August 2026.
