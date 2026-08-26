@@ -70,14 +70,27 @@ files.forEach(file => {
   // produced a real, reproducible infinite hang on this exact file (4 script blocks) the first
   // time 'mangled' was tried here. Obfuscating all blocks together in one pass gives the
   // generator a single shared namespace to avoid collisions in, which is what it's designed for.
+  // Some <script> blocks are tiny CDN-loader snippets (window.XLSX||document.write('<script src=...'))
+  // that MUST stay exactly where they are and run untouched - they rely on document.write() executing
+  // synchronously, inline, during the browser's normal HTML parse to correctly pause and block on
+  // fetching the external library before the rest of the page continues. Combining them into the same
+  // obfuscated bundle as the application code (which was tried first) breaks that timing guarantee in
+  // a way that only shows up in a real browser/Electron environment, not in Node.js-based testing -
+  // this was the actual root cause of KIT Check's Run button silently failing in the packaged .exe
+  // despite working perfectly when run as plain, unobfuscated source. Confirmed and fixed August 2026.
+  const isCdnLoader = (code) => /document\.write\(/.test(code) && code.length < 300;
+
   const blocks = [];
   html = html.replace(/<script>([\s\S]*?)<\/script>/g, (match, code) => {
+    if (isCdnLoader(code)) {
+      return match; // leave completely untouched, in its original position
+    }
     blocks.push(code);
     return '\u0000SCRIPT_BLOCK_' + (blocks.length - 1) + '\u0000';
   });
 
   if(blocks.length === 0){
-    console.error('No <script> blocks found in', file);
+    console.error('No obfuscatable <script> blocks found in', file);
     return;
   }
 
