@@ -73,7 +73,7 @@
 </head>
 <body>
 <header>
-  <h1>KIT Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v0.3.0</span></h1>
+  <h1>KIT Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v0.4.0</span></h1>
   <p>Checks your KIT indexing sheet directly, before it goes to iGlass - governance rules plus geophysical completeness checks (Shot Points, CDP, Inline/Xline, and more). Choose a client, upload your KIT export, and run the check.</p>
   <div style="max-width:280px;margin-top:14px">
     <label style="margin:0 0 6px">Client</label>
@@ -2188,18 +2188,14 @@ function checkGeophysical(row, hm, cat, sub, add){
   // live here too, which meant XOM (once its matrix entry was upgraded to Mandatory) got flagged
   // twice for the same blank field. Removed in favor of the single matrix-driven path.
 
-  // UNAVAILABLE-In-Wrong-Column: the UNAVAILABLE: exemption note must go in Item Remarks.
-  // If it appears in Inventory Remark (but not Item Remarks) the exemption silently fails —
-  // the tool won't see it and will flag the missing fields anyway, which confuses reviewers.
-  // Flag as WARN so the note can be moved to the correct column.
-  if(hm['ITEM_REMARKS'] && hm['INVENTORY_REMARK']){
-    const _itemRem = getVal(row, hm, 'ITEM_REMARKS').toUpperCase();
-    const _invRem  = getVal(row, hm, 'INVENTORY_REMARK').toUpperCase();
-    if(/\bUNAVAILABLE\b/.test(_invRem) && !/\bUNAVAILABLE\b/.test(_itemRem)){
-      add('ITEM_REMARKS', 'UNAVAILABLE-In-Wrong-Column', '', 'WARN',
-        'UNAVAILABLE note found in Inventory Remark but must be in Item Remarks — move it so the exemption takes effect');
-    }
-  }
+  // UNAVAILABLE-In-Wrong-Column removed (August 2026) - this rule's premise was that the
+  // UNAVAILABLE: exemption note had to be in Item Remarks specifically, or the exemption would
+  // silently fail. That's no longer true - getRemarksText() checks both Item Remarks and
+  // Inventory Remarks/Remark together, so the exemption works correctly regardless of which
+  // column the note is in. The rule was also dead code in practice even before that: it checked
+  // hm['INVENTORY_REMARK'] (singular), a canonical key that was never actually defined anywhere
+  // in the alias tables for any client, so this condition could never be true. Confirmed dead via
+  // direct testing (GenV/XOM/Hess, zero flags in all three) before removal.
 
   // 10. Job Number must not be blank
   if(hm['JOB_NUMBER'] && !getVal(row, hm, 'JOB_NUMBER')){
@@ -2288,19 +2284,6 @@ function checkRowGENV(row, idx){
   // If Exception Code is DUPLICATE, this item is a duplicate of another item in the database that
   // already carries the required data - so "missing content" checks are bypassed entirely for it.
   const isDuplicateException = hm['EXCEPTION_CODE'] && normKey(getVal(row, hm, 'EXCEPTION_CODE')) === normKey('DUPLICATE');
-
-  // UNAVAILABLE-In-Wrong-Column: the UNAVAILABLE: exemption note must go in Item Remarks.
-  // If it appears in Inventory Remark (but not Item Remarks) the exemption silently fails —
-  // the tool won't see it and will flag the missing fields anyway, which confuses reviewers.
-  // Flag as WARN so the note can be moved to the correct column.
-  if(hm['ITEM_REMARKS'] && hm['INVENTORY_REMARK']){
-    const _itemRem = getVal(row, hm, 'ITEM_REMARKS').toUpperCase();
-    const _invRem  = getVal(row, hm, 'INVENTORY_REMARK').toUpperCase();
-    if(/\bUNAVAILABLE\b/.test(_invRem) && !/\bUNAVAILABLE\b/.test(_itemRem)){
-      add('ITEM_REMARKS', 'UNAVAILABLE-In-Wrong-Column', '', 'WARN',
-        'UNAVAILABLE note found in Inventory Remark but must be in Item Remarks — move it so the exemption takes effect');
-    }
-  }
 
   // 1. Category / Sub-Category governance check
   if(!cat){
@@ -3589,14 +3572,9 @@ function checkRowHESS(row, idx){
         '"'+country+'" is on the Hess International out-of-scope country list — data should remain inactive in iGlass');
   });
 
-  // ── 7. UNAVAILABLE in wrong column ──────────────────────────────────────
-  if(hm['ITEM_REMARKS'] && hm['INVENTORY_REMARK']){
-    const _itemRem = getVal(row, hm, 'ITEM_REMARKS').toUpperCase();
-    const _invRem  = getVal(row, hm, 'INVENTORY_REMARK').toUpperCase();
-    if(/\bUNAVAILABLE\b/.test(_invRem) && !/\bUNAVAILABLE\b/.test(_itemRem))
-      add('ITEM_REMARKS','UNAVAILABLE-In-Wrong-Column','','WARN',
-        'UNAVAILABLE note found in Inventory Remark but must be in Item Remarks — move it so the exemption takes effect');
-  }
+  // UNAVAILABLE-In-Wrong-Column removed (August 2026) - same dead-code removal as GenV/XOM's
+  // instances of this rule (see checkGeophysical for the full explanation). Confirmed dead via
+  // direct testing before removal - zero flags for Hess with this exact scenario.
 
   // ── 8. Geophysical completeness (same rules as GenV) ────────────────────
   if(!isDuplicateException) checkGeophysical(row, hm, cat, sub, add);

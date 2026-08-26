@@ -22,18 +22,32 @@ if(files.length === 0){
 //   - selfDefending: has a documented history of causing the obfuscated code to hang outright
 //     (fixed for one specific runtime in v5.4.1 "Fixed obfuscated code hanging... when
 //     selfDefending is enabled" - evidence the feature is fragile in general).
-// The remaining settings (string array encoding, hexadecimal identifiers, light dead code
-// injection) still meaningfully obscure the governance rules from casual reading, without
-// the performance/hang risk of the two settings above.
+//
+// UPDATE (August 2026, round 2): deadCodeInjection, stringArrayEncoding:['base64'], and
+// identifierNamesGenerator:'hexadecimal' have now ALSO been turned off/changed, after users
+// reported Google Drive's scanner flagging the built .exe as "contains virus or potentially
+// unwanted software." All three are well-documented heuristic triggers for exactly this kind
+// of content-based scanning, independent of code-signing:
+//   - identifierNamesGenerator:'hexadecimal' produces _0x4a2b-style names, a naming pattern
+//     strongly associated with obfuscated malware specifically. Switched to 'mangled', which
+//     produces short a/b/c-style names - the same style ordinary minifiers (Terser, UglifyJS)
+//     already produce as standard practice, not a red flag on its own.
+//   - stringArrayEncoding:['base64'] hides every string literal behind base64, a classic
+//     evasion technique. Removed - stringArray alone (plain array extraction, no encoding
+//     layer) still meaningfully obscures string literals without this specific pattern.
+//   - deadCodeInjection injects junk code blocks purely for obscurity, another common
+//     evasion signature, and provided the least actual protection of the three. Turned off.
+// Net effect: less aggressive obfuscation, but a build that shouldn't pattern-match to
+// content-based malware heuristics the same way. If code-hiding needs to be stronger again in
+// the future, re-enable these deliberately and expect to deal with scanner false-positives as
+// a real, recurring cost of doing so - it's not a one-time fix.
 const options = {
   compact: true,
   controlFlowFlattening: false,
-  deadCodeInjection: true,
-  deadCodeInjectionThreshold: 0.1,
+  deadCodeInjection: false,
   stringArray: true,
-  stringArrayEncoding: ['base64'],
   stringArrayThreshold: 0.75,
-  identifierNamesGenerator: 'hexadecimal',
+  identifierNamesGenerator: 'mangled',
   renameGlobals: false,
   selfDefending: false,
   disableConsoleOutput: false
@@ -45,12 +59,41 @@ files.forEach(file => {
     return;
   }
   let html = fs.readFileSync(file, 'utf8');
-  let count = 0;
+
+  // IMPORTANT: all <script> blocks in an HTML file share one global scope at runtime, executed
+  // in document order - functionally equivalent to one combined script. But obfuscating each
+  // block SEPARATELY (as this used to do) lets identifierNamesGenerator:'mangled' independently
+  // restart short-name generation (a, b, c...) in each block, so two blocks can easily generate
+  // the same top-level name for two completely different internal functions - the second
+  // silently overwrites the first at runtime, corrupting its string-decoder and causing the
+  // obfuscator's own internal verification loop to spin forever. Confirmed directly: this
+  // produced a real, reproducible infinite hang on this exact file (4 script blocks) the first
+  // time 'mangled' was tried here. Obfuscating all blocks together in one pass gives the
+  // generator a single shared namespace to avoid collisions in, which is what it's designed for.
+  const blocks = [];
   html = html.replace(/<script>([\s\S]*?)<\/script>/g, (match, code) => {
-    count++;
-    const result = JavaScriptObfuscator.obfuscate(code, options);
-    return '<script>' + result.getObfuscatedCode() + '</script>';
+    blocks.push(code);
+    return '\u0000SCRIPT_BLOCK_' + (blocks.length - 1) + '\u0000';
   });
+
+  if(blocks.length === 0){
+    console.error('No <script> blocks found in', file);
+    return;
+  }
+
+  const combined = blocks.join('\n;\n'); // ';' separator guards against ASI edge cases at block boundaries
+  const result = JavaScriptObfuscator.obfuscate(combined, options);
+  const obfuscatedCombined = result.getObfuscatedCode();
+
+  // Put the full combined, obfuscated code in the FIRST script tag's position; make every other
+  // original script tag position empty. Execution order and shared scope are unaffected - this
+  // is exactly equivalent to how the blocks already ran together at runtime.
+  let first = true;
+  html = html.replace(/\u0000SCRIPT_BLOCK_\d+\u0000/g, () => {
+    if(first){ first = false; return '<script>' + obfuscatedCombined + '</script>'; }
+    return '';
+  });
+
   fs.writeFileSync(file, html, 'utf8');
-  console.log('Obfuscated ' + count + ' inline script block(s) in ' + file);
+  console.log('Obfuscated ' + blocks.length + ' inline script block(s) in ' + file + ' (combined into one pass)');
 });
