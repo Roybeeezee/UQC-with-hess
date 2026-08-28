@@ -73,7 +73,7 @@
 </head>
 <body>
 <header>
-  <h1>KIT Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v0.5.0</span></h1>
+  <h1>KIT Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v0.6.0</span></h1>
   <p>Checks your KIT indexing sheet directly, before it goes to iGlass - governance rules plus geophysical completeness checks (Shot Points, CDP, Inline/Xline, and more). Choose a client, upload your KIT export, and run the check.</p>
   <div style="max-width:280px;margin-top:14px">
     <label style="margin:0 0 6px">Client</label>
@@ -3360,7 +3360,7 @@ function checkRowXOM(row, idx){
     if(hm['TITLE']){
       const titleVal = getVal(row, hm, 'TITLE');
       if(!titleVal && !isNotedUnavailable(row, hm, ['TITLE'])){
-        add('TITLE', 'Processed-Title-Review', '', 'WARN',
+        add('TITLE', 'Processed-Title-Review', '', 'REVIEW',
           'Title is blank — required for PROCESSED, but does not fail regardless of Digital Format');
       }
     }

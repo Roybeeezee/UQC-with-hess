@@ -73,7 +73,7 @@
 </head>
 <body>
 <header>
-  <h1>QC Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v1.5.0</span></h1>
+  <h1>QC Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v1.6.0</span></h1>
   <p>Governance rules (categories, required fields, controlled values) are built in per client. Choose a client, upload your data export, and run QC.</p>
   <div style="max-width:280px;margin-top:14px">
     <label style="margin:0 0 6px">Client</label>
@@ -2610,7 +2610,7 @@ function checkRowXOM(row, idx){
   if(!isDuplicateException && !isLasDlisXOM && !XOM_TRACE_DATA_CATEGORIES.includes(catKey) && hm['TITLE']){
     const titleVal = getVal(row, hm, 'TITLE');
     if(!titleVal && !isNotedUnavailable(row, hm, ['TITLE'])){
-      add('TITLE', 'XOM-Title-NonTrace-Required', '', 'WARN',
+      add('TITLE', 'XOM-Title-NonTrace-Required', '', 'REVIEW',
         'Title is blank — required for non-trace-data categories');
     }
   }
@@ -2648,7 +2648,7 @@ function checkRowXOM(row, idx){
     if(hm['TITLE']){
       const titleVal = getVal(row, hm, 'TITLE');
       if(!titleVal && !isNotedUnavailable(row, hm, ['TITLE'])){
-        add('TITLE', 'Processed-Title-Review', '', 'WARN',
+        add('TITLE', 'Processed-Title-Review', '', 'REVIEW',
           'Title is blank — required for PROCESSED, but does not fail regardless of Digital Format');
       }
     }
