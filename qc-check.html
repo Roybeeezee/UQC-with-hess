@@ -11,6 +11,7 @@
 <script>window.XLSX||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/scr'+'ipt>')</script>
 <script src="vendor/exceljs.min.js"></script>
 <script>window.ExcelJS||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"><\/scr'+'ipt>')</script>
+<script src="vendor/uqc-governance-data.js"></script>
 <style>
   :root{--bg:#150c2e;--panel:#241a4d;--muted:#b3a8e6;--text:#f3f0ff;--accent:#8b7cff;--good:#3ddc97;--warn:#ffc861;--review:#c4b5fd;--bad:#ff7a7a;--line:#3d2e70;}
   *{box-sizing:border-box} html{overflow-x:auto} body{margin:0;min-width:900px;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#150c2e,#1e1550);color:var(--text)}
@@ -73,7 +74,7 @@
 </head>
 <body>
 <header>
-  <h1>QC Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v1.6.0</span></h1>
+  <h1>QC Check <span style="font-size:14px;font-weight:400;opacity:.65;vertical-align:middle">v1.7.0</span></h1>
   <p>Governance rules (categories, required fields, controlled values) are built in per client. Choose a client, upload your data export, and run QC.</p>
   <div style="max-width:280px;margin-top:14px">
     <label style="margin:0 0 6px">Client</label>
@@ -81,6 +82,7 @@
       <option value="GENV">GenV</option>
       <option value="XOM">XOM (ExxonMobil)</option>
       <option value="WEL">Woodside (WEL)</option>
+      <option value="HESS">Hess International</option>
     </select>
   </div>
 </header>
@@ -238,19 +240,21 @@
 /* ─── 1. CATEGORY / SUB-CATEGORY ────────────────────────────────────────────
    Shared by both GenV and XOM engines. Add a new pair: ["CATEGORY","SUB-CATEGORY"],
    Remove a pair: delete that line. Keep a comma after every line except the last. */
-const GOVERNANCE_SHARED = [
+// GOVERNANCE_SHARED moved to vendor/uqc-governance-data.js (extracted August 2026, confirmed byte-identical with kit-check.html)
+
+/* ─── 1b. HESS CATEGORY / SUB-CATEGORY ─────────────────────────────────────
+   Hess's own taxonomy - built directly from the Hess governance document's
+   "Categorization Guidelines" sheet (182 pairs, verified Aug 2026), NOT a
+   subset of GOVERNANCE_SHARED. Same data as kit-check.html's GOVERNANCE_HESS. */
+const GOVERNANCE_HESS = [
   ["ADMIN", "AFE"],
   ["ADMIN", "CONTRACT"],
   ["ADMIN", "CORRESPONDENCE"],
   ["ADMIN", "FOREIGN LANGUAGE"],
-  ["ADMIN", "INVOICE"],
-  ["ADMIN", "LAND"],
   ["ADMIN", "LEASE AGREEMENT"],
   ["ADMIN", "LEGAL"],
-  ["ADMIN", "MISC"],
   ["ADMIN", "REPORT"],
   ["ADMIN", "SUPPORT"],
-  ["ADMIN", "TRANSMITTALS"],
   ["COMPLETION/WORKOVER", "LOG"],
   ["COMPLETION/WORKOVER", "PERFORATION"],
   ["COMPLETION/WORKOVER", "PROCEDURE"],
@@ -263,6 +267,7 @@ const GOVERNANCE_SHARED = [
   ["CSEM", "PROCESSED"],
   ["CSEM", "SUPPORT"],
   ["DRILLING", "BOTTOM HOLE ASSEMBLY"],
+  ["DRILLING", "WELL HEADER"],
   ["DRILLING", "CASING"],
   ["DRILLING", "CEMENT"],
   ["DRILLING", "DAILY DRILLING REPORT"],
@@ -273,7 +278,7 @@ const GOVERNANCE_SHARED = [
   ["DRILLING", "PLANNING / ANALYSIS"],
   ["DRILLING", "POSITIONAL LOG"],
   ["DRILLING", "WELL ABANDONMENT REPORT"],
-  ["DRILLING", "WELL HEADER"],
+  ["DRILLING", "WELL HISTORY"],
   ["DRILLING", "WELLBORE SCHEMATIC"],
   ["FIELD", "FIELD"],
   ["FIELD", "FIELD WITH GEOMETRY"],
@@ -295,7 +300,6 @@ const GOVERNANCE_SHARED = [
   ["FORMATION EVALUATION", "PALEO"],
   ["FORMATION EVALUATION", "PETROPHYSICAL ANALYSIS"],
   ["FORMATION EVALUATION", "PRESSURE TEST"],
-  ["FORMATION EVALUATION", "REPORT"],
   ["FORMATION EVALUATION", "SECTION-COLUMN"],
   ["FORMATION EVALUATION", "SYNTHETICS"],
   ["FORMATION EVALUATION", "WATER ANALYSIS"],
@@ -328,11 +332,10 @@ const GOVERNANCE_SHARED = [
   ["LAND/LEGAL", "LAND"],
   ["LAND/LEGAL", "LEGAL"],
   ["MAP", "FOLD"],
+  ["MAP", "GRAV-MAG"],
   ["MAP", "IMAGE"],
-  ["MAP", "LAND"],
   ["MAP", "LOCATION"],
   ["MAP", "SP/BIN CENTER"],
-  ["MAP", "STRUCTURE"],
   ["MAP", "TOPO"],
   ["MAP", "WELL PLAT"],
   ["MICROSEISMIC", "ARRAYS"],
@@ -347,23 +350,18 @@ const GOVERNANCE_SHARED = [
   ["MICROSEISMIC", "SOFTWARE OUTPUTS"],
   ["MICROSEISMIC", "SUPPORT"],
   ["NAVIGATION", "LIDAR"],
-  ["NAVIGATION", "BIN CENTRE"],
   ["NAVIGATION", "PROCESSED"],
   ["NAVIGATION", "RAW"],
-  ["NAVIGATION", "SHAPE FILE"],
   ["NAVIGATION", "SHAPEFILE"],
   ["NAVIGATION", "XYZ"],
-  ["INTERPRETATION PROJECT", "DATA PACKAGE"],
   ["PROCESSED", "ATTRIBUTE PROCESSING"],
   ["PROCESSED", "AVO"],
   ["PROCESSED", "GATHER"],
-  ["PROCESSED", "GATHERS"],
   ["PROCESSED", "MIGRATION"],
   ["PROCESSED", "PRE-STACK"],
   ["PROCESSED", "PRE-STACK DEPTH MIGRATION"],
   ["PROCESSED", "PRE-STACK TIME MIGRATION"],
   ["PROCESSED", "PROJECT BACKUP"],
-  ["PROCESSED", "PSDM"],
   ["PROCESSED", "SECTION"],
   ["PROCESSED", "STACK"],
   ["PROCESSED", "UNKNOWN"],
@@ -373,27 +371,22 @@ const GOVERNANCE_SHARED = [
   ["PRODUCTION/OPERATIONS", "PRODUCTION TEST"],
   ["PRODUCTION/OPERATIONS", "REPORT"],
   ["PRODUCTION/OPERATIONS", "WELL ANALYSIS"],
-  ["RAW FIELD", "FIELD"],
   ["REGULATORY", "APPLICATION"],
   ["REGULATORY", "FILING"],
   ["REGULATORY", "NOTICE"],
   ["REGULATORY", "PERMIT"],
-  ["SUPPORT", "ACQUISITION"],
   ["SUPPORT", "ACQUISITION REPORT"],
   ["SUPPORT", "CHAIN"],
   ["SUPPORT", "DRILLER"],
   ["SUPPORT", "EBCDIC HEADER"],
-  ["SUPPORT", "FILE LISTING"],
   ["SUPPORT", "GENERAL"],
   ["SUPPORT", "HAZARD"],
   ["SUPPORT", "HORIZON"],
-  ["SUPPORT", "INTERPRETATION REPORT/SUPPORT"],
   ["SUPPORT", "LOAD SHEET"],
   ["SUPPORT", "MAP"],
   ["SUPPORT", "MINERAL NO PERMIT"],
   ["SUPPORT", "MONITORS"],
   ["SUPPORT", "NAVIGATION LOG"],
-  ["SUPPORT", "NAVIGATION REPORT/SUPPORT"],
   ["SUPPORT", "OBSERVERS"],
   ["SUPPORT", "PLOT/CHARTS"],
   ["SUPPORT", "PROCESSING FILE"],
@@ -406,34 +399,25 @@ const GOVERNANCE_SHARED = [
   ["SUPPORT", "TAPE LOGS"],
   ["SUPPORT", "TRANSMITTAL"],
   ["SUPPORT", "VELOCITY"],
-  ["VELOCITY", "PROCESSED"],
   ["VELOCITY", "RMS"],
-  ["VELOCITY", "VELOCITY SURVEY"],
+  ["VELOCITY", "AVERAGE"],
+  ["VELOCITY", "DIP"],
+  ["VELOCITY", "INTERVAL"],
+  ["VELOCITY", "STACKING"],
+  ["VELOCITY", "PSTM"],
+  ["VELOCITY", "PSDM"],
+  ["VELOCITY", "MIGRATION"],
+  ["VELOCITY", "AZIMUTH"],
+  ["VELOCITY", "DELTA"],
+  ["VELOCITY", "EPSILON"],
+  ["VELOCITY", "ETA"],
+  ["VELOCITY", "PROCESSED"],
   ["VSP", "CHECKSHOT"],
   ["VSP", "PROCESSED"],
   ["VSP", "RAW"],
   ["VSP", "REPORT"],
-  ["WELL COMPLETION", "CEMENT"],
-  ["WELL COMPLETION", "OPERATIONS"],
-  ["WELL COMPLETION", "STIMULATION"],
-  ["WELL DEVELOPMENT", "CORE"],
-  ["WELL DEVELOPMENT", "FLUIDS"],
-  ["WELL DEVELOPMENT", "OPEN HOLE LOG"],
-  ["WELL DEVELOPMENT", "TESTING"],
-  ["WELL DRILLING", "CEMENT"],
-  ["WELL DRILLING", "DAILY REPORT"],
-  ["WELL DRILLING", "MUD"],
-  ["WELL DRILLING", "OPERATIONS"],
-  ["WELL DRILLING", "PLANNING/ANALYSIS"],
-  ["WELL INFO", "ENVIRONMENTAL"],
-  ["WELL INFO", "MISC"],
-  ["WELL INFO", "REPORT"],
-  ["WELL INFO", "SAFETY"],
   ["WELL LOG", "ANNOTATED"],
-  ["WELL LOG", "BOREHOLE IMAGE"],
-  ["WELL LOG", "CALIBRATION FILE"],
   ["WELL LOG", "CASED HOLE"],
-  ["WELL LOG", "CASED HOLE LOG"],
   ["WELL LOG", "COMPOSITE"],
   ["WELL LOG", "FIELD"],
   ["WELL LOG", "FINAL"],
@@ -441,338 +425,206 @@ const GOVERNANCE_SHARED = [
   ["WELL LOG", "LWD/MWD"],
   ["WELL LOG", "MUD LOG"],
   ["WELL LOG", "OPEN HOLE"],
-  ["WELL LOG", "OPEN HOLE LOG"],
   ["WELL LOG", "PROPRIETARY"],
-  ["WELL LOG", "VELOCITY"],
-  ["WELL LOG", "REPORT"],
-  ["WELL LOG", "SUPPORT"],
-  ["WELL LOG", "WIRELINE"],
-  ["WELL OPERATIONS", "ARTIFICIAL LIFT"],
-  ["WELL OPERATIONS", "DAILY REPORT"],
-  ["WELL OPERATIONS", "OPERATIONS"],
-  ["WELL OPERATIONS", "REPORT"],
-  ["WELL OPERATIONS", "STIMULATION"],
-  ["WELL OPERATIONS", "WELLBORE SCHEMATIC"],
-  ["DRILLING", "WELL HISTORY"],
-  ["GRAV-MAG", "GRAV-MAG SUPPORT"],
-  ["GRAV-MAG", "REPORT"],
-  ["INTERPRETATION PROJECT", "BID ROUND"],
-  ["MAP", "GEOLOGICAL-GEOPHYSICAL"],
-  ["MAP", "GRAV-MAG"],
-  ["MAP", "ISOPACH"],
-  ["PROCESSED", "ATTRIBUTE DATA"],
-  ["SUPPORT", "ACQUISITION REPORT/SUPPORT"],
-  ["SUPPORT", "GEOHAZARD REPORT/SUPPORT"],
-  ["SUPPORT", "NAVIGATION LOGS"],
-  ["SUPPORT", "OBSERVERS LOGS"],
-  ["SUPPORT", "PROCESSING"],
-  ["SUPPORT", "PROCESSING REPORT/SUPPORT"],
-  ["SUPPORT", "TRANSCRIPTION REPORT/SUPPORT"],
-  ["ADMIN", "AGREEMENT"],
-  ["ADMIN", "ARCHIVE"],
-  ["ADMIN", "ENDORSEMENT PACK"],
-  ["ADMIN", "FOREIGN LANGUAGE DOCUMENT"],
-  ["COMPLETION/WORKOVER", "ARTIFICIAL LIFT REPAIR"],
-  ["COMPLETION/WORKOVER", "CASING REPAIR"],
-  ["COMPLETION/WORKOVER", "DOWNHOLE TOOLS & EQUIPMENT"],
-  ["COMPLETION/WORKOVER", "OPERATIONS"],
-  ["COMPLETION/WORKOVER", "PERFORATION REPORT"],
-  ["COMPLETION/WORKOVER", "PERMANENT ABANDONMENT"],
-  ["COMPLETION/WORKOVER", "TUBING TALLY"],
-  ["COMPLETION/WORKOVER", "WELLBORE SCHEMATIC"],
-  ["COMPLETION/WORKOVER", "WELLHEAD & TREE"],
-  ["DISTRIBUTED SENSOR NETWORK", "CEMENT BOND"],
-  ["DISTRIBUTED SENSOR NETWORK", "COMPLETIONS MONITORING"],
-  ["DISTRIBUTED SENSOR NETWORK", "INSTRUMENTATION"],
-  ["DISTRIBUTED SENSOR NETWORK", "PRODUCTION MONITORING"],
-  ["DISTRIBUTED SENSOR NETWORK", "VSP"],
-  ["DRILLING", "DIRECTIONAL/DEVIATION SURVEY"],
-  ["DRILLING", "FINAL WELL / GEOLOGICAL REPORT"],
-  ["DRILLING", "JOB EVENTS"],
-  ["DRILLING", "MUD"],
-  ["DRILLING", "OPERATIONS"],
-  ["DRILLING", "PLANNING/ANALYSIS"],
-  ["DRILLING", "PLUG BACK"],
-  ["DRILLING", "REPORT"],
-  ["DRILLING", "SURVEY"],
-  ["FIELD", "RAW FIELD REFORMAT"],
-  ["FIELD", "SECTION"],
-  ["FIELD", "STATISTICS"],
-  ["FIELD", "UNKNOWN"],
-  ["FINANCIAL", "AFE"],
-  ["FINANCIAL", "CORRESPONDENCE"],
-  ["FINANCIAL", "INVOICE"],
-  ["FINANCIAL", "REPORT"],
-  ["FORMATION EVALUATION", "BIOSTRATIGRAPHY"],
-  ["FORMATION EVALUATION", "CORE"],
-  ["FORMATION EVALUATION", "FLUIDS"],
-  ["FORMATION EVALUATION", "GEOCHEMICAL"],
-  ["FORMATION EVALUATION", "LABORATORY / SAMPLE REPORT"],
-  ["FORMATION EVALUATION", "TESTING"],
-  ["FORMATION EVALUATION", "TOPS"],
-  ["GATHERS", "COFF GATHERS"],
-  ["GATHERS", "GATHERS"],
-  ["GATHERS", "VELOCITY GATHERS"],
-  ["GEOHAZARD SURVEY", "CORE DATA"],
-  ["GEOHAZARD SURVEY", "CTD/VELOCIMETER DATA"],
-  ["GEOHAZARD SURVEY", "EBS SURVEY DATA AND REPORT"],
-  ["GEOHAZARD SURVEY", "ECHOSOUNDER BATHYMETRY"],
-  ["GEOHAZARD SURVEY", "GEOCHEMICAL"],
-  ["GEOHAZARD SURVEY", "GEOHAZARD MAP"],
-  ["GEOHAZARD SURVEY", "GEOHAZARD REPORT"],
-  ["GEOHAZARD SURVEY", "GEOLOGIC CORE DATA AND REPORT"],
-  ["GEOHAZARD SURVEY", "GEOPHYSICAL REPORT"],
-  ["GEOHAZARD SURVEY", "GEOTECHNICAL"],
-  ["GEOHAZARD SURVEY", "GEOTECHNICAL DATA"],
-  ["GEOHAZARD SURVEY", "GEOTECHNICAL REPORT"],
-  ["GEOHAZARD SURVEY", "GIS DATABASES"],
-  ["GEOHAZARD SURVEY", "HI RES SEISMIC"],
-  ["GEOHAZARD SURVEY", "KINGDOM PROJECTS"],
-  ["GEOHAZARD SURVEY", "LIDAR SURVEY DATA"],
-  ["GEOHAZARD SURVEY", "MAGNETOMETER"],
-  ["GEOHAZARD SURVEY", "MAP"],
-  ["GEOHAZARD SURVEY", "MULTIELEMENT PLOTS"],
-  ["GEOHAZARD SURVEY", "NAVIGATION"],
-  ["GEOHAZARD SURVEY", "SEISMIC REFRACTION"],
-  ["GEOHAZARD SURVEY", "SIDE-SCAN SONAR"],
-  ["GEOHAZARD SURVEY", "SUB-BOTTOM PROFILER"],
-  ["GEOHAZARD SURVEY", "TOPOGRAPHIC SURVEY DATA"],
-  ["GEOHAZARD SURVEY", "ULTRA HI RES SEISMIC"],
-  ["GEOHAZARD SURVEY", "WEB-BASED MAPS"],
-  ["GRAV-MAG", "GRAV-MAG MAP"],
-  ["GRAV-MAG", "GRAV-MAG REPORT"],
-  ["GRAV-MAG", "GRAV_MAG REPORT"],
-  ["GRAV-MAG", "MULTIELEMENT PLOTS"],
-  ["HES", "REPORT"],
-  ["INTERPRETATION PROJECT", "BIOSTRATIGRAPHY"],
-  ["INTERPRETATION PROJECT", "CROSS SECTION"],
-  ["INTERPRETATION PROJECT", "FARM-IN/FARM-OUT"],
-  ["INTERPRETATION PROJECT", "FIELD"],
-  ["INTERPRETATION PROJECT", "FIELD WITH GEOMETRY"],
-  ["INTERPRETATION PROJECT", "MAP"],
-  ["INTERPRETATION PROJECT", "MICROSEISMIC"],
-  ["INTERPRETATION PROJECT", "PHOTO"],
-  ["INTERPRETATION PROJECT", "PLOT/CHART"],
-  ["INTERPRETATION PROJECT", "RAW FIELD"],
-  ["INTERPRETATION PROJECT", "SECTION-COLUMN"],
-  ["INTERPRETATION PROJECT", "SEISMIC INTERPRETATION"],
-  ["INTERPRETATION PROJECT", "SYNTHETIC"],
-  ["INTERPRETATION PROJECT", "TEST"],
-  ["INTERPRETATION PROJECT", "TOPS/PICKS/HORIZONS"],
-  ["MAP", "INTERPRETATION"],
-  ["MAP", "SEISMIC BASE"],
-  ["MICROSEISMIC", "RAW"],
-  ["MIGRATION", "FIELD"],
-  ["MIGRATION", "GATHERS"],
-  ["MIGRATION", "IMAGE"],
-  ["MIGRATION", "MICROSEISMIC"],
-  ["MIGRATION", "MISC"],
-  ["MIGRATION", "SECTION"],
-  ["MIGRATION", "STACK"],
-  ["NAVIGATION", "REPORT"],
-  ["PROCESSED", "REFRACTION"],
-  ["PROCESSED", "SEISMIC SECTION"],
-  ["PROCESSED", "SYNTHETIC"],
-  ["PRODUCTION/OPERATIONS", "ARTIFICIAL LIFT"],
-  ["PRODUCTION/OPERATIONS", "FACILITIES"],
-  ["PRODUCTION/OPERATIONS", "FIELD"],
-  ["PRODUCTION/OPERATIONS", "FIELD/RESERVOIR REPORT"],
-  ["PRODUCTION/OPERATIONS", "OPERATIONS"],
-  ["PRODUCTION/OPERATIONS", "REGION/BASIN REPORT"],
-  ["PRODUCTION/OPERATIONS", "REPORTS"],
-  ["PRODUCTION/OPERATIONS", "STIMULATION"],
-  ["PRODUCTION/OPERATIONS", "WELL TEST"],
-  ["PRODUCTION/OPERATIONS", "WELLBORE SCHEMATIC"],
-  ["REGULATORY", "AGENCY"],
-  ["REGULATORY", "CASING PRESSURE WAIVERS"],
-  ["REGULATORY", "INTEGRITY TESTING"],
-  ["REGULATORY", "REPORT"],
-  ["REGULATORY", "WELL PLAT"],
-  ["SUPPORT", "DEPTH SLICE"],
-  ["SUPPORT", "GEOFRAME BACKUP"],
-  ["SUPPORT", "NAVIGATION REPORT"],
-  ["SUPPORT", "OBSERVERS LOGS/REPORT"],
-  ["SUPPORT", "PARS BACKUP"],
-  ["SUPPORT", "PETREL"],
-  ["SUPPORT", "PROJECT BACKUP"],
-  ["SUPPORT", "REFRACTION"],
-  ["SUPPORT", "REPORTS"],
-  ["SUPPORT", "SECTION"],
-  ["SUPPORT", "SEISMIC ACQUISITION QC CHART"],
-  ["SUPPORT", "SEISMIC ACQUISITION QC REPORT"],
-  ["SUPPORT", "SEISMIC ACQUISITION REPORT"],
-  ["SUPPORT", "SEISMIC NAVIGATION QC REPORT"],
-  ["SUPPORT", "SEISMIC NAVIGATION REPORT"],
-  ["SUPPORT", "SEISMIC PROCESSING QC CHART"],
-  ["SUPPORT", "SEISMIC PROCESSING QC REPORT"],
-  ["SUPPORT", "SEISMIC PROCESSING REPORT"],
-  ["SUPPORT", "STATICS"],
-  ["SUPPORT", "SYNTHETIC"],
-  ["SUPPORT", "TIME SLICE"],
-  ["SUPPORT", "VSP ACQUISITION REPORT"],
-  ["SUPPORT", "VSP INTERPRETATION REPORT"],
-  ["SUPPORT", "VSP NAVIGATION QC REPORT"],
-  ["SUPPORT", "VSP NAVIGATION REPORT"],
-  ["SUPPORT", "VSP OBSERVERS LOGS / REPORT"],
-  ["SUPPORT", "VSP PROCESSING QC REPORT"],
-  ["SUPPORT", "VSP PROCESSING REPORT"],
-  ["VELOCITY", "CHECKSHOT"],
-  ["VELOCITY", "PROCESSED VELOCITY"],
-  ["VELOCITY", "VELOCITY-PROCESSING"],
-  ["VSP", "DEVIATION SURVEY"],
-  ["WELL LOG", "BIOSTRATIGRAPHIC"],
-  ["WELL LOG", "CORRELATION"],
-  ["WELL LOG", "DEPTH REGISTRATION FILE"],
-  ["WELL LOG", "DIGITAL"],
-  ["WELL LOG", "DIGITAL - ENHANCED (PARSED)"],
-  ["WELL LOG", "DRA CALIBRATION FILE (GEOGRAPHIC)"],
-  ["WELL LOG", "EDITED"],
-  ["WELL LOG", "GEO_APPS"],
-  ["WELL LOG", "LIC CALIBRATION FILE (PETRA)"],
-  ["WELL LOG", "MUD/SAMPLE LOG"],
-  ["WELL LOG", "PETRO_APPS"],
-  ["WELL LOG", "PRESSURE"],
-  ["WELL LOG", "PRODUCTION"],
-  ["WELL LOG", "RASTER"],
-  ["WELL LOG", "RAW"],
-  ["WELL LOG", "SIF CALIBRATION FILE (TGS)"],
-  ["WELL LOG", "SYNTHETIC"],
-  ["WELL LOG", "UDB"],
-  ["WELL LOG", "XML CALIBRATION FILE (IHSe)"],
-  ["VSP", "SYNTHETIC"],
-  ["GRAV-MAG", "GRAVITY DATA - PROCESSED"],
-  ["MIGRATION", "GATHER"],
-  ["FIELD", "SEGD FIELD DATA"],
-  ["FIELD", "SEGY FIELD DATA"],
-  ["FIELD", "RAW NODE"],
-  ["FIELD", "NAV MERGE"],
-  ["INTERPRETATION PROJECT", "INTERPRETATION PROJECT"],
-  ["INTERPRETATION PROJECT", "PETREL"],
-  ["INTERPRETATION PROJECT", "SMT"],
-  ["WELL LOG", "XML CALIBRATION FILE  (IHSE)"],
-  ["WELL LOG", "DRA CALIBRATION FILE (GEOGRAPHIX)"],
-  ["WELL LOG", "VELOCITY LOG"],
-  ["FORMATION EVALUATION", "VSP"],
-  ["FORMATION EVALUATION", "CHECKSHOT SURVEY"],
-  ["FORMATION EVALUATION", "DIGITAL"],
-  ["FORMATION EVALUATION", "DIGITAL - ENHANCED (PARSED)"],
-  ["FORMATION EVALUATION", "RASTER"],
-  ["FORMATION EVALUATION", "SIF CALIBRATION FILE (TGS)"],
-  ["FORMATION EVALUATION", "XML CALIBRATION FILE (IHSE)"],
-  ["FORMATION EVALUATION", "LIC CALIBRATION FILE (PETRA)"],
-  ["FORMATION EVALUATION", "DRA CALIBRATION FILE (GEOGRAPHIX)"],
-  ["FORMATION EVALUATION", "MUD LOG"],
-  ["FORMATION EVALUATION", "SUPPORT"],
-  ["FORMATION EVALUATION", "SAMPLE"],
-  ["FORMATION EVALUATION", "PETROPHYSICAL"],
-  ["FORMATION EVALUATION", "SIF-CALIBRATION"],
-  ["FORMATION EVALUATION", "LIC-CALIBRATION"],
-  ["FORMATION EVALUATION", "LABORATORY-SAMPLE REPORT"],
-  ["FORMATION EVALUATION", "ORGANIC-CARBON-ANALYSIS"],
-  ["FORMATION EVALUATION", "FIBER DATA"],
-  ["DRILLING", "DRILL STEM TEST"],
-  ["PRODUCTION/OPERATIONS", "ENGINEERING"],
-  ["PROCESSED", "FWI"],
-  ["PROCESSED", "GATHERS - SHOT CHANNEL"],
-  ["PROCESSED", "GATHERS - 2D CDP OFFSET"],
-  ["PROCESSED", "GATHERS - 3D CDP ANGLE"],
-  ["PROCESSED", "GATHERS - 3D CDP OFFSET"],
-  ["PROCESSED", "STACK - ANGLE"],
-  ["PROCESSED", "STACK - OFFSET"],
-  ["PROCESSED", "INVERSION"],
-  ["PROCESSED", "COHERENCE-CUBE"],
-  ["PROCESSED", "PRE-STACK MIGRATION"],
-  ["PROCESSED", "PSDM STACKS"],
-  ["PROCESSED", "PSTM STACKS"],
-  ["PROCESSED", "CMS"],
-  ["PROCESSED", "PSTM"],
-  ["PROCESSED", "SHOT GATHERS"],
-  ["GATHERS", "INTERPOLATED GATHERS"],
-  ["GATHERS", "AVO GATHERS"],
-  ["GATHERS", "STRUCTURAL GATHERS"],
-  ["GATHERS", "PREPROCESSED"],
-  ["GATHERS", "MIGRATED"],
-  ["GATHERS", "CDG GATHERS"],
-  ["GATHERS", "CMG GATHERS"],
-  ["GATHERS", "COG GATHERS"],
-  ["GATHERS", "CRG GATHERS"],
-  ["GATHERS", "CSG GATHERS"],
-  ["GATHERS", "PRDM GATHERS"],
-  ["GEOHAZARD SURVEY", "BATHYMETRY"],
-  ["GEOHAZARD SURVEY", "HIRES SEISMIC"],
-  ["GEOHAZARD SURVEY", "MAGNETIC"],
-  ["GEOHAZARD SURVEY", "MAPS"],
-  ["GEOHAZARD SURVEY", "REPORTS"],
-  ["GEOHAZARD SURVEY", "SUPPORT"],
-  ["GEOHAZARD SURVEY", "SIDE-SCAN SONAR IMAGE"],
-  ["GEOHAZARD SURVEY", "VELOCITY PROFILE"],
-  ["GEOHAZARD SURVEY", "GRID"],
-  ["GEOHAZARD SURVEY", "MUTLI-BEAM ECHO SOUNDER"],
-  ["GEOHAZARD SURVEY", "TRACKPLOT"],
-  ["GEOHAZARD SURVEY", "CONTOURS"],
-  ["GEOHAZARD SURVEY", "AUV"],
-  ["GEOHAZARD SURVEY", "SUB-BOTTOM SEISMIC"],
-  ["DISTRIBUTED SENSOR NETWORK", "RAW FIELD DATA"],
-  ["SUPPORT", "UPHOLE"],
-  ["SUPPORT", "INTERPRETATION PROJECT"],
-  ["SUPPORT", "MICROSEISMIC REPORTS/SUPPORT"],
-  ["SUPPORT", "PROCESSING SUPPORT DOCUMENTS"],
-  ["SUPPORT", "PROCESSING SUPPORT"],
-  ["SUPPORT", "INTERPRETATION SUPPORT"],
-  ["SUPPORT", "ACQUISITION SUPPORT DOCUMENTS"],
-  ["SUPPORT", "ACQUISITION SUPPORT"],
-  ["SUPPORT", "HORIZONS"],
-  ["SUPPORT", "SHALLOW HAZARD"],
-  ["SUPPORT", "TIMESLICE"],
-  ["SUPPORT", "ACQUISITION FILE"],
-  ["ADMIN", "CONTRACTS"],
-  ["ADMIN", "UNKNOWN"],
-  ["ADMIN", "UNKNOWN FROM TRANGO MIGRATION"],
-  ["NAVIGATION", "BIN-GRID COORDINATES"],
-  ["NAVIGATION", "LAND POSITIONING DATA"],
-  ["NAVIGATION", "MARINE POSITIONING DATA - PROCESSED"],
-  ["NAVIGATION", "MARINE POSITIONING DATA - RAW"],
-  ["NAVIGATION", "POLYGON"],
-  ["NAVIGATION", "UNKNOWN"],
-  ["NAVIGATION", "SPS"],
-  ["GRAV-MAG", "SUPPORT"],
-  ["GRAV-MAG", "MAP"],
-  ["GRAV-MAG", "GRAVITY DATA - RAW"],
-  ["GRAV-MAG", "GRAVITY MAGNETIC DATA - PROCESSED"],
-  ["GRAV-MAG", "GRAVITY MAGNETIC DATA - RAW"],
-  ["GRAV-MAG", "MAGNETIC DATA - PROCESSED"],
-  ["GRAV-MAG", "ACQUISITION REPORT"],
-  ["GRAV-MAG", "PROCESSING REPORT"],
-  ["GRAV-MAG", "NAVIGATION"],
-  ["VELOCITY", "AVERAGE"],
-  ["VELOCITY", "AZIMUTH"],
-  ["VELOCITY", "DELTA"],
-  ["VELOCITY", "EPSILON"],
-  ["VELOCITY", "ETA"],
-  ["VELOCITY", "INSTANTANEOUS"],
-  ["VELOCITY", "INTERVAL"],
-  ["VELOCITY", "UNKNOWN"],
-  ["VELOCITY", "DIP"],
-  ["VELOCITY", "STACKING"],
-  ["VELOCITY", "ANISOTROPIC VELOCITY ANALYSIS"],
-  ["VELOCITY", "DMO"],
-  ["VELOCITY", "HDVA"],
-  ["VELOCITY", "LOW FREQUENCY MODEL"],
-  ["VELOCITY", "MIGRATION"],
-  ["VELOCITY", "PSDM"],
-  ["VELOCITY", "PSTM"],
-  ["VELOCITY", "VA1"],
-  ["VELOCITY", "VA2"],
-  ["VELOCITY", "VA3"],
-  ["VELOCITY", "RAW"],
-  ["VSP", "FIELD"]
+  ["WELL LOG", "BOREHOLE IMAGE"],
+  ["WELL LOG", "CALIBRATION FILE"],
+  ["WELL LOG", "WIRELINE"]
 ];
+const VALID_CATS_HESS = new Set(GOVERNANCE_HESS.map(g => normKey(g[0])));
+const VALID_PAIRS_HESS = new Set(GOVERNANCE_HESS.map(g => normKey(g[0]) + '|' + normKey(g[1])));
+
+// Same two country lists as kit-check.html - "should remain inactive in iGlass" (QC sheet) is
+// a genuinely different concept from "out of scope, do not actively index" (Out-of-Scope-Hess-
+// INTL-Paper/Tapes sheets). Mexico is the only country on both lists.
+const HESS_INACTIVE_COUNTRIES = [
+  "BELARUS","CRIMEA","CUBA","NORTH KOREA","RUSSIA",
+  "SUDAN","SYRIA","UKRAINE","IRAN","INDONESIA","MEXICO"
+];
+const HESS_INACTIVE_COUNTRY_SET = new Set(HESS_INACTIVE_COUNTRIES.map(normKey));
+const HESS_OUT_OF_SCOPE_COUNTRIES = ["GUYANA","MEXICO"];
+const HESS_OUT_OF_SCOPE_COUNTRY_SET = new Set(HESS_OUT_OF_SCOPE_COUNTRIES.map(normKey));
+
+/* ─── 1c. HESS GEOPHYSICAL/TECHNICAL FIELD REQUIREMENTS ─────────────────────
+   Same data as kit-check.html's HESS_GEOPHYSICAL_RULES, built from the Hess
+   governance document's "Required Fields" sheet (91 rows, verified Aug 2026).
+   None of these fields exist in the real QC Check export today (confirmed -
+   the real export is a fixed ~30-column structure, same as GenV/XOM), so this
+   is groundwork for if/when those columns get added, matching the same
+   future-proofing already applied to GenV/XOM's geophysical fields in QC Check -
+   not something expected to fire on real data right now. */
+const HESS_GEOPHYSICAL_RULES = [
+  {category:'ADMIN', subcategory:'(any)', dimension:'(any)', format:'', required:[]},
+  {category:'MAP', subcategory:'(any)', dimension:'(any)', format:'', required:[]},
+  {category:'MICROSESMIC', subcategory:'(any)', dimension:'(any)', format:'', required:[]},
+  {category:'VSP', subcategory:'(any)', dimension:'(any)', format:'', required:[]},
+  {category:'FIELD', subcategory:'FIELD WITH GEOMETRY', dimension:'2D', format:'(always SEGY)', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'FIELD', subcategory:'RAW FIELD', dimension:'2D', format:'SEGA, SEGB, SEGC, SEGD', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'FIELD', subcategory:'FIELD', dimension:'2D', format:'SEGY', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'CDP GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'CMP GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'CRP GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'DEMULTIPLE GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'MIG GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'PSDM GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'PSTM GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'RECEIVER GATHERS', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'SHOT GATHERS', dimension:'2D', format:'(always SEGY)', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GRAV-MAG', subcategory:'GRAV-MAG PROCESSED', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'GRAV-MAG RAW', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'GRAVITY PROCESSED', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'GRAVITY RAW', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'GRAVITY SUPPORT', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'MAGNETIC PROCESSED', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'MAGNETIC RAW', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'GRAV-MAG', subcategory:'MAGNETIC SUPPORT', dimension:'(any)', format:'ASCII/UNKNOWN', required:[]},
+  {category:'NAVIGATION', subcategory:'PROCESSED', dimension:'2D', format:'SEGP1, ASCII-DOS', required:["FSP", "LSP"]},
+  {category:'NAVIGATION', subcategory:'PROCESSED', dimension:'3D', format:'SEGP1, ASCII-DOS', required:[]},
+  {category:'NAVIGATION', subcategory:'RAW', dimension:'2D/3D', format:'UNKNOWN', required:[]},
+  {category:'NAVIGATION', subcategory:'SHAPEFILE', dimension:'2D/3D', format:'ZIP', required:[]},
+  {category:'NAVIGATION', subcategory:'XYZ', dimension:'2D/3D', format:'ASCII', required:[]},
+  {category:'PROCESSED', subcategory:'ATTRIBUTE PROCESSING', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'AVO', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'MIGRATION', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'PRE-STACK DEPTH MIGRATION', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'PRE-STACK TIME MIGRATION', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'SECTION', dimension:'2D', format:'PDF, TIF, JPEG', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'STACK', dimension:'2D', format:'(always SEGY)', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'SUPPORT', subcategory:'ACQUISITION REPORT', dimension:'2D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP"]},
+  {category:'SUPPORT', subcategory:'OBSERVERS', dimension:'3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE"]},
+  {category:'SUPPORT', subcategory:'OBSERVERS', dimension:'2D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP"]},
+  {category:'SUPPORT', subcategory:'SURVEY', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'LOAD SHEET', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'NAVIGATION LOGS', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'PLOT/CHARTS', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'PROCESSING FILE', dimension:'2D/3D', format:'UNKNOWN', required:[]},
+  {category:'SUPPORT', subcategory:'PROCESSING REPORT', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'REPORT', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'VELOCITY', dimension:'2D/3D', format:'PDF, ASCII-DOS', required:[]},
+  {category:'SUPPORT', subcategory:'TAPE LOGS', dimension:'2D/3D', format:'PDF, TIF, XLS, DOC, ASCII-DOS', required:[]},
+  {category:'VELOCITY', subcategory:'PROCESSED', dimension:'2D', format:'SEGY', required:["FSP", "LSP", "FIRST_CDP", "LAST_CDP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'FIELD', subcategory:'FIELD WITH GEOMETRY', dimension:'3D', format:'(always SEGY)', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'FIELD', subcategory:'RAW FIELD', dimension:'3D', format:'SEGA, SEGB, SEGC, SEGD', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'FIELD', subcategory:'FIELD', dimension:'3D', format:'SEGY', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'GATHERS', subcategory:'CDP GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'CMP GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'CRP GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'DEMULTIPLE GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'MIG GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'PSDM GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'PSTM GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'RECEIVER GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'SHOT GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE", "FSP", "LSP", "FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'GATHERS', subcategory:'COF GATHERS', dimension:'3D', format:'(always SEGY)', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'NAVIGATION', subcategory:'PROCESSED', dimension:'3D', format:'SEGP1, ASCII-DOS', required:[]},
+  {category:'PROCESSED', subcategory:'ATTRIBUTE PROCESSING', dimension:'3D', format:'(always SEGY)', required:["INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'PROCESSED', subcategory:'AVO', dimension:'3D', format:'(always SEGY)', required:["INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'PROCESSED', subcategory:'MIGRATION', dimension:'3D', format:'(always SEGY)', required:["INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'PROCESSED', subcategory:'PRE-STACK DEPTH MIGRATION', dimension:'3D', format:'(always SEGY)', required:["INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'PROCESSED', subcategory:'PRE-STACK TIME MIGRATION', dimension:'3D', format:'(always SEGY)', required:["INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'PROCESSED', subcategory:'SECTION', dimension:'3D', format:'PDF, TIF, JPEG', required:["INLINE", "XLINE", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'PROCESSED', subcategory:'STACK', dimension:'3D', format:'(always SEGY)', required:["INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'VELOCITY', subcategory:'(any)', dimension:'3D', format:'SEGY', required:["FIRST_CDP", "LAST_CDP", "INLINE", "XLINE", "FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH", "BIN_SPACING"]},
+  {category:'MICROSEISMIC', subcategory:'ARRAYS', dimension:'MS', format:'', required:[]},
+  {category:'MICROSEISMIC', subcategory:'EVENTS', dimension:'MS', format:'EXCEL', required:[]},
+  {category:'MICROSEISMIC', subcategory:'FIELD', dimension:'MS', format:'SEGY;SEGD', required:["FIRST_FIELD_FILE", "LAST_FIELD_FILE"]},
+  {category:'MICROSEISMIC', subcategory:'LOG', dimension:'MS', format:'LAS;LIS;DLIS;TIF', required:[]},
+  {category:'MICROSEISMIC', subcategory:'MAPS', dimension:'MS', format:'', required:[]},
+  {category:'MICROSEISMIC', subcategory:'PROCESSED', dimension:'MS', format:'', required:[]},
+  {category:'MICROSEISMIC', subcategory:'REPORTS', dimension:'MS', format:'', required:[]},
+  {category:'MICROSEISMIC', subcategory:'SOFTWARE', dimension:'MS', format:'', required:[]},
+  {category:'MICROSEISMIC', subcategory:'SOFTWARE OUTPUTS', dimension:'MS', format:'', required:[]},
+  {category:'MICROSEISMIC', subcategory:'SUPPORT', dimension:'MS', format:'', required:[]},
+  {category:'VSP', subcategory:'CHECKSHOT', dimension:'2D/3D', format:'SEGY;EXCEL;ASCII', required:[]},
+  {category:'VSP', subcategory:'PROCESSED', dimension:'2D/3D', format:'SEGY', required:["FIRST_TRC", "LAST_TRC", "NUM_TRACES", "SAMPLE_RATE", "RECORD_LENGTH"]},
+  {category:'VSP', subcategory:'RAW', dimension:'2D/3D', format:'SEGY', required:[]},
+  {category:'WELL LOG', subcategory:'COMPOSITE', dimension:'WELL', format:'LAS;LIS;DLIS;TIF;CGM;EMF;PDF', required:["TOP_DEPTH", "TOP_DEPTH_UOM", "BOTTOM_DEPTH", "BOTTOM_DEPTH_UOM"]},
+  {category:'WELL LOG', subcategory:'DEPTH REGISTRATION FILE', dimension:'WELL', format:'LAS;LIS;DLIS;TIF;CGM;EMF;PDF', required:["TOP_DEPTH", "TOP_DEPTH_UOM", "BOTTOM_DEPTH", "BOTTOM_DEPTH_UOM"]},
+  {category:'WELL LOG', subcategory:'FORMATION EVALUATION', dimension:'WELL', format:'LAS;LIS;DLIS;TIF;CGM;EMF;PDF', required:["TOP_DEPTH", "TOP_DEPTH_UOM", "BOTTOM_DEPTH", "BOTTOM_DEPTH_UOM"]},
+  {category:'WELL LOG', subcategory:'LWD/MWD', dimension:'WELL', format:'LAS;LIS;DLIS;TIF;CGM;EMF;PDF', required:["TOP_DEPTH", "TOP_DEPTH_UOM", "BOTTOM_DEPTH", "BOTTOM_DEPTH_UOM"]},
+  {category:'WELL LOG', subcategory:'MUDLOGGING', dimension:'WELL', format:'LAS;LIS;DLIS;TIF;CGM;EMF;PDF', required:["TOP_DEPTH", "TOP_DEPTH_UOM", "BOTTOM_DEPTH", "BOTTOM_DEPTH_UOM"]},
+  {category:'WELL LOG', subcategory:'WIRELINE', dimension:'WELL', format:'LAS;LIS;DLIS;TIF;CGM;EMF;PDF', required:["TOP_DEPTH", "TOP_DEPTH_UOM", "BOTTOM_DEPTH", "BOTTOM_DEPTH_UOM"]},
+  {category:'OTHER', subcategory:'*', dimension:'WELL', format:'TIF;CGM;EMF;PDF', required:[]}
+];
+
+// Splits a Hess "format" string (comma/semicolon/slash-delimited, or the literal marker
+// "(always SEGY)") into an array of individual format names. Returns null specifically for a
+// blank format string, meaning that row applies regardless of format (not "matches nothing").
+function parseHessFormats(fmtStr){
+  if(!fmtStr) return null;
+  if(fmtStr === '(always SEGY)') return ['SEGY'];
+  return fmtStr.split(/[,;/]/).map(f => f.trim()).filter(Boolean);
+}
+
+const _hessGeoLookupCache = new Map();
+
+// Hess-specific governance lookup, built from the real Hess Required Fields sheet
+// (HESS_GEOPHYSICAL_RULES). No safe-intersection fallback for an unmatched format - if no row's
+// format list contains the row's actual format, this returns an empty set (no defined
+// requirement) rather than guessing at one via intersection. Same design as kit-check.html's
+// version of this function; qc-check.html has no equivalent GenV/XOM geophysical engine to
+// mirror, so this is a new, standalone addition rather than a ported pattern.
+function lookupRequiredGeoHESS(catKey, subKey, dim, fmt){
+  const cacheKey = catKey + '|' + subKey + '|' + dim + '|' + fmt;
+  const cached = _hessGeoLookupCache.get(cacheKey);
+  if(cached) return cached;
+
+  const candidates = HESS_GEOPHYSICAL_RULES.filter(r => {
+    if(normKey(r.category) !== catKey) return false;
+    if(normKey(r.subcategory) !== normKey('(any)') && normKey(r.subcategory) !== subKey) return false;
+    if(normKey(r.dimension) === normKey('(any)')) return true;
+    if(normKey(r.dimension) === normKey('2D/3D')) return dim === normKey('2D') || dim === normKey('3D');
+    return normKey(r.dimension) === dim;
+  });
+
+  let req = new Set();
+  for(const r of candidates){
+    const formatList = parseHessFormats(r.format);
+    if(formatList === null || formatList.some(f => normKey(f) === fmt)){
+      r.required.forEach(f => req.add(f));
+    }
+  }
+  _hessGeoLookupCache.set(cacheKey, req);
+  return req;
+}
+
+// Hess's own geophysical/technical field completeness check. None of these fields exist in the
+// real QC Check export today (confirmed - see the HESS_GEOPHYSICAL_RULES comment above), so this
+// correctly does nothing on real data right now via the hm[key] guard below - groundwork for
+// if/when those columns get added, not something expected to fire currently.
+function checkGeophysicalHESS(row, hm, cat, sub, add){
+  const catKey = normKey(cat), subKey = normKey(sub);
+  let dimension = hm['DIMENSION'] ? normKey(getVal(row, hm, 'DIMENSION')) : '';
+  if(!dimension){
+    const sn = hm['SEISMIC_NAME'] ? getVal(row, hm, 'SEISMIC_NAME').toUpperCase() : '';
+    const ds = hm['DESCRIPTION']  ? getVal(row, hm, 'DESCRIPTION').toUpperCase()  : '';
+    if(/\b3D\b/.test(sn) || /\b3D\b/.test(ds)) dimension = normKey('3D');
+  }
+  const fmt = hm['DIGITAL_FORMAT'] ? normKey(getVal(row, hm, 'DIGITAL_FORMAT')) : '';
+
+  const required = lookupRequiredGeoHESS(catKey, subKey, dimension, fmt);
+  required.forEach(key => {
+    if(!hm[key]) return;
+    const val = getVal(row, hm, key);
+    if(!val && !isNotedUnavailable(row, hm, unavailableKeywordsFor(key))){
+      add(key, 'Hess-Governance-Required-Field', '', 'FAIL',
+        key.replace(/_/g,' ') + ' is blank — required for ' + cat + '/' + sub + ' per Hess governance');
+    }
+  });
+}
+
 
 
 /* ─── 2. DIGITAL FORMATS ────────────────────────────────────────────────────
-   Shared by both engines. Add: "NEWFORMAT",  Remove: delete the entry.
+   Add: "NEWFORMAT",  Remove: delete the entry.
    Any value starting with UKOOA is accepted automatically — no need to list variants.
-   Use UPPERCASE. Keep commas between entries. */
+   Use UPPERCASE. Keep commas between entries.
+   NOTE (August 2026): this list and kit-check.html's have diverged - kit-check.html (KIT
+   Check, pre-upload) has 10 physical tape-media formats this file (QC Check, post-upload)
+   does not: 3480, 3490, 3490E, 3590, 3592, DLT 8000, SDLT1, 21-TRACK, 8MM, 9-TRACK.
+   Unconfirmed whether this is intentional (a post-upload digital record arguably shouldn't
+   carry a raw tape format) or an update that was made to one file and not mirrored to the
+   other - flagging rather than guessing either way. If adding/removing an entry here, check
+   kit-check.html too. */
 const DIGITAL_FORMAT_LIST = [
   "SEG-Y", "SEGY", "SEG Y", "SEG-D", "SEGD", "ASCII", "SEGA", "SEGB",
   "SEGC", "ASCII-DOS", "SEGP1", "ZIP", "PDF", "TIF", "JPEG", "XLS",
@@ -866,7 +718,7 @@ const ALLOWED_VALUES = [["SAMPLE TYPE","TIME","TIME"],["SAMPLE TYPE","TIME DOMAI
 /* ===================== Derived lookups ===================== */
 /* ===================== XOM ruleset (from KDM_XOM_Global_Data_Governance_Rules.xlsx) ===================== */
 
-const DEPRECATED_NOTES_XOM = {"ADMIN|AFE": "DO NOT USE, USE ADMIN/AGREEMENT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|CONTRACT": "DO NOT USE, USE ADMIN/AGREEMENT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|INVOICE": "DO NOT USE, USE ADMIN/ARCHIVE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|LEGAL": "DO NOT USE, USE ADMIN/ARCHIVE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "ADMIN|REPORT": "DO NOT USE, USE ADMIN/CORRESPONDENCE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "COMPLETION/WORKOVER|PERFORATION REPORT": "DO NOT USE, USE COMPLETION/WORKOVER/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|JOB EVENTS": "DO NOT USE, USE DRILLING/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|MUD": "DO NOT USE, USE DRILLING/DRILLING FLUIDS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|PLUG BACK": "DO NOT USE, USE DRILLING/OPERATIONS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "DRILLING|SURVEY": "DO NOT USE, USE DRILLING/DIRECTIONAL/DEVIATION SURVEY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FIELD|FIELD": "DO NOT USE, USE FIELD/RAW FIELD OR FIELD/FIELD WITH GEOMETRY INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|MICROSEISMIC": "DO NOT USE, USE MICROSEISMIC/FIELD INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|SECTION": "DO NOT USE, DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|STATISTICS": "DO NOT USE, DELETE THIS SUBCAT (ONCE EMPTY)", "FIELD|UNKNOWN": "DO NOT USE, DELETE THIS SUBCAT (ONCE EMPTY)", "FINANCIAL|AFE": "DO NOT USE, USE ADMIN/AGREEMENT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FINANCIAL|CORRESPONDENCE": "DO NOT USE, USE ADMIN/CORRESPONDENCE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FINANCIAL|INVOICE": "DO NOT USE, USE ADMIN/ARCHIVE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FINANCIAL|REPORT": "DO NOT USE, USE ADMIN/CORRESPONDENCE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FORMATION EVALUATION|BIOSTRATIGRAPHY": "DO NOT USE, USE INTERPRETATION PROJECT/BIOSTRATIGRAPHY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "FORMATION EVALUATION|TOPS": "DO NOT USE, USE INTERPRETATION PROJECT/TOPS/PICKS/HORIZONS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "GATHERS|CMP GATHERS": "DO NOT USE, USE GATHERS/CDP GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|CRP GATHERS": "DO NOT USE, USE GATHERS/RECEIVER GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|GATHERS": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|PSDM GATHERS": "DO NOT USE, USE GATHERS/MIG GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|PSTM GATHERS": "DO NOT USE, USE GATHERS/MIG GATHERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "GATHERS|VELOCITY GATHERS": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "GEOHAZARD SURVEY|EBS SURVEY DATA AND REPORT": "DO NOT USE, USE GEOHAZARD SURVEY/REPORT, THIS SUBCAT HAS BEEN INACTIVATED", "GEOHAZARD SURVEY|GEOLOGIC CORE DATA AND REPORT": "DO NOT USE, USE GEOHAZARD SURVEY/CORE DATA, THIS SUBCAT HAS BEEN INACTIVATED", "GEOHAZARD SURVEY|GEOPHYSICAL REPORT": "DO NOT USE, USE GEOHAZARD SURVEY/REPORT, THIS SUBCAT HAS BEEN INACTIVATED", "GEOHAZARD SURVEY|ULTRA HI RES SEISMIC": "DO NOT USE, USE GEOHAZARD SURVEY/HI RES SEISMIC INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)4", "GEOHAZARD SURVEY|WEB-BASED MAPS": "DO NOT USE, USE GEOHAZARD SURVEY/MAP, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|FIELD": "DO NOT USE, USE INTERPRETATION PROJECT/FIELD/RESERVOIR REPORT INSTEAD,  THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|FIELD WITH GEOMETRY": "DO NOT USE, USE FIELD/FIELD WITH GEOMETRY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|MICROSEISMIC": "DO NOT USE, USE MICROSEISMIC/REPORTS INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|PHOTO": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|RAW FIELD": "DO NOT USE, USE FIELD/RAW FIELD  INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "INTERPRETATION PROJECT|SECTION-COLUMN": "DO NOT USE, USE CROSS SECTION INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "INTERPRETATION PROJECT|SYNTHETIC": "DO NOT USE, USE WELL LOG/SYNTHETIC  INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "INTERPRETATION PROJECT|TEST": "DO NOT USE, USE SUPPORT/SEISMIC ACQUISITION INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MAP|FOLD": "DO NOT USE, USE SUPPORT/SEISMIC ACQUISITION INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MAP|SP/BIN CENTER": "DO NOT USE, USE MAP/SEISMIC BASE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MAP|TOPO": "DO NOT USE, USE MAP/LOCATION INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "MICROSEISMIC|GENERAL": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "MIGRATION|FIELD": "DO NOT USE", "MIGRATION|GATHERS": "DO NOT USE", "MIGRATION|IMAGE": "DO NOT USE", "MIGRATION|MICROSEISMIC": "DO NOT USE", "MIGRATION|MISC": "DO NOT USE", "MIGRATION|SECTION": "DO NOT USE", "MIGRATION|STACK": "DO NOT USE", "PROCESSED|UNKNOWN": "DO NOT USE, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "PRODUCTION/OPERATIONS|FIELD": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "PRODUCTION/OPERATIONS|FIELD/RESERVOIR REPORT": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "PRODUCTION/OPERATIONS|OPERATIONS": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "PRODUCTION/OPERATIONS|REGION/BASIN REPORT": "DO NOT USE, USE PRODUCTION/OPERATIONS/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "REGULATORY|AGENCY": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "REGULATORY|CASING PRESSURE WAIVERS": "DO NOT USE, USE REGULATORY/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "REGULATORY|INTEGRITY TESTING": "DO NOT USE, USE REGULATORY/REPORT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "SUPPORT|GENERAL": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|OBSERVERS LOGS/REPORT": "DO NOT USE, USE OBSERVERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|PETREL": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|REFRACTION": "DO NOT USE / DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|REPORT": "DO NOT USE,  DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|REPORTS": "DO NOT USE,  DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SECTION": "DO NOT USE,  DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC ACQUISITION QC CHART": "DO NOT USE, USE ACQUISITION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC ACQUISITION QC REPORT": "DO NOT USE, USE ACQUISITION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC NAVIGATION QC REPORT": "DO NOT USE, USE NAVIGATION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC PROCESSING QC CHART": "DO NOT USE, USE SEISMIC PROCESSING REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SEISMIC PROCESSING QC REPORT": "DO NOT USE, USE SEISMIC PROCESSING REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|SYNTHETIC": "DO NOT USE, USE WELL LOG/SYNTHETIC  INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|VSP NAVIGATION QC REPORT": "DO NOT USE, USE VSP NAVIGATION REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|VSP OBSERVERS LOGS / REPORT": "DO NOT USE, USE SUPPORT/OBSERVERS INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "SUPPORT|VSP PROCESSING QC REPORT": "DO NOT USE, USE VSP PROCESSING REPORT INSTEAD, THEN DELETE THIS SUBCAT (ONCE EMPTY)", "VELOCITY|CHECKSHOT": "DO NOT USE, USE VSP/CHECKSHOT INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|ANNOTATED": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|BIOSTRATIGRAPHIC": "DO NOT USE, USE INTERPRETATION PROJECT/BIOSTRATIGRAPHY INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|CASED HOLE": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|CORRELATION": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|DIGITAL": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|DIGITAL - ENHANCED (PARSED)": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|DRA CALIBRATION FILE (GEOGRAPHIC)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|EDITED": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|FIELD": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|FINAL": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|GEO_APPS": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|LIC CALIBRATION FILE (PETRA)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|MUD/SAMPLE LOG": "DO NOT USE, USE WELL LOG/MUDLOGGING INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|OPEN HOLE": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|PETRO_APPS": "DO NOT USE, USE WELL LOG/FORMATION EVALUATION, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|PRESSURE": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|PRODUCTION": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|RASTER": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|RAW": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|REPORT": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|SIF CALIBRATION FILE (TGS)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|SUPPORT": "DO NOT USE, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|SYNTHETIC": "DO NOT USE, USE INTERPRETATION PROJECT/SYNTHETIC INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|UDB": "DO NOT USE, USE WELL LOG/WIRELINE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED", "WELL LOG|XML CALIBRATION FILE (IHSE)": "DO NOT USE, USE WELL LOG/DEPTH REGISTRATION FILE INSTEAD, THIS SUBCAT HAS BEEN INACTIVATED"};
+// DEPRECATED_NOTES_XOM moved to vendor/uqc-governance-data.js (extracted August 2026, confirmed byte-identical with kit-check.html)
 
 const MANDATORY_FIELD_MATRIX_XOM = {"ADMIN":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","DOCAUTHOR":"WA","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"COMPLETION/WORKOVER":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","DOCAUTHOR":"WA","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"CSEM":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"WA"},"DRILLING":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","TOP_DEPTH_UOM":"WA","BOTTOM_DEPTH_UOM":"WA","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","DOCAUTHOR":"WA","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"FIELD":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","DIGITAL_FORMAT_REV":"WA","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","FSP":"M","LSP":"M","SAMPLE_TYPE":"M","RECORD_LENGTH":"M","RECORD_LENGTH_UOM":"M","SAMPLE_RATE":"M","SAMPLE_RATE_UOM":"M","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"WA","FIRST_FIELD_FILE":"M","LAST_FIELD_FILE":"M","FIRST_TRC":"M","LAST_TRC":"M","NUM_TRACES":"M"},"FINANCIAL":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"FORMATION EVALUATION":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","TOP_DEPTH_UOM":"WA","BOTTOM_DEPTH_UOM":"WA","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","VERTICAL_SCALE_UOM":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"GATHERS":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","DIGITAL_FORMAT_REV":"WA","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","INLINE":"WA","XLINE":"WA","BIN_SPACING":"WA","FSP":"M","LSP":"M","SAMPLE_TYPE":"M","RECORD_LENGTH":"M","RECORD_LENGTH_UOM":"M","SAMPLE_RATE":"M","SAMPLE_RATE_UOM":"M","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"M","FIRST_CDP":"M","LAST_CDP":"M","FIRST_FIELD_FILE":"WA","LAST_FIELD_FILE":"WA","FIRST_TRC":"M","LAST_TRC":"M","NUM_TRACES":"M"},"GRAV-MAG":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"HES":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","DOCAUTHOR":"WA","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"LAND/LEGAL":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"MAP":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"MICROSEISMIC":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","DIGITAL_FORMAT_REV":"WA","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","INLINE":"WA","XLINE":"WA","BIN_SPACING":"WA","FSP":"M","LSP":"M","SAMPLE_TYPE":"M","RECORD_LENGTH":"M","RECORD_LENGTH_UOM":"M","SAMPLE_RATE":"M","SAMPLE_RATE_UOM":"M","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","FIRST_CDP":"M","LAST_CDP":"M","FIRST_FIELD_FILE":"WA","LAST_FIELD_FILE":"WA","FIRST_TRC":"M","LAST_TRC":"M","NUM_TRACES":"M"},"NAVIGATION":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"PROCESSED":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","DIGITAL_FORMAT_REV":"WA","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","INLINE":"WA","XLINE":"WA","BIN_SPACING":"WA","FSP":"M","LSP":"M","RECORD_LENGTH_UOM":"M","SAMPLE_RATE_UOM":"M","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"WA","FIRST_CDP":"M","LAST_CDP":"M","FIRST_TRC":"M","LAST_TRC":"M","NUM_TRACES":"M"},"PRODUCTION/OPERATIONS":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","TOP_DEPTH_UOM":"WA","BOTTOM_DEPTH_UOM":"WA","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","DOCAUTHOR":"WA","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"REGULATORY":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"},"SUPPORT":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"WA","FIRST_FIELD_FILE":"WA","LAST_FIELD_FILE":"WA"},"VELOCITY":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","DIGITAL_FORMAT_REV":"WA","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","INLINE":"WA","XLINE":"WA","BIN_SPACING":"WA","FSP":"WA","LSP":"WA","SAMPLE_TYPE":"WA","RECORD_LENGTH":"WA","RECORD_LENGTH_UOM":"WA","SAMPLE_RATE":"WA","SAMPLE_RATE_UOM":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"WA","FIRST_CDP":"WA","LAST_CDP":"WA","FIRST_TRC":"WA","LAST_TRC":"WA","NUM_TRACES":"WA"},"VSP":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","DIGITAL_FORMAT_REV":"WA","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA","3D_STEP_INLINE_AND_CROSSLINE_INCREMENT":"WA","FIRST_TRC":"M","LAST_TRC":"M","NUM_TRACES":"M"},"WELL LOG":{"CURRENT_LOCATION":"M","ORIGINAL_FILE_NAME":"M","FILE_SIZE_MB":"M","DIGITAL_FORMAT":"M","CATEGORY":"M","SUB_CATEGORY":"M","CREATED_BY":"M","CREATED_FOR":"M","CREATED_DATE":"M","EXCEPTION_CODE":"WA","DESCRIPTION":"M","TOP_DEPTH_UOM":"M","BOTTOM_DEPTH_UOM":"M","ARCHIVE_DESCRIPTION":"WA","PROCESS_DESCRIPTION":"WA","SEISMIC_WELL_PROJECTDATASTOR_REFERENCE":"M","SOURCE_BARCODE":"WA","SOURCE_MEDIA_TYPE":"M","SOURCE_MEDIA_NUMBER":"WA","SOURCE_CURRENT_LOCATION":"M","SOURCE_PERMANENT_LOCATION":"M","EXXONMOBIL_ENTITY":"WA","INVENTORY_REMARKS":"WA","VERTICAL_SCALE_UOM":"WA","DOCUMENT_LANGUAGE":"M","SOFTWARE_VERSION":"WA"}};
 
@@ -1129,25 +981,7 @@ const ALIAS_KEY_BY_NORM_HEADER_XOM = new Map(Object.keys(FIELD_ALIASES_XOM).map(
    NOTE: Woodside does NOT use the ODIDB-style cross-check GenV/XOM use - see
    the runQC() wiring below. runOdidbCrossCheck() stays scoped to GenV/XOM only.
    ============================================================================ */
-const GOVERNANCE_WEL = [
-  ["ADMIN","CONTRACTS"], ["ADMIN","CORRESPONDENCE"],
-  ["CSEM","INVERSION"], ["CSEM","RECEIVER FILTERED"], ["CSEM","RECEIVER RAW"], ["CSEM","RECEIVER PROCESSED"], ["CSEM","TRANSMITTER RAW"],
-  ["FIELD","FIELD"], ["FIELD","FTC"], ["FIELD","IDENTED NAV MERGE SHOTS"], ["FIELD","H-RAW"], ["FIELD","P-UP / P-DOWN"],
-  ["GATHERS","PRE PROCESSED"], ["GATHERS","DEMULTIPLE"], ["GATHERS","DMO"], ["GATHERS","PRE MIGRATION"], ["GATHERS","RAW MIGRATED"], ["GATHERS","FINAL MIGRATED"],
-  ["GRAV-MAG","GRAVITY MAGNETIC GRIDDED"], ["GRAV-MAG","GRAVITY MAGNETIC RAW"], ["GRAV-MAG","GRAVITY MAGNETIC SUPPORT"],
-  ["GRAV-MAG","GRAVITY GRIDDED"], ["GRAV-MAG","GRAVITY RAW"], ["GRAV-MAG","GRAVITY SUPPORT"],
-  ["GRAV-MAG","MAGNETIC GRIDDED"], ["GRAV-MAG","MAGNETIC RAW"], ["GRAV-MAG","MAGNETIC SUPPORT"],
-  ["NAVIGATION","BIN CENTRE"], ["NAVIGATION","BIN GRID"], ["NAVIGATION","EDITED NAVIGATION"], ["NAVIGATION","RAW NAVIGATION"],
-  ["NAVIGATION","SEGY NAVIGATION"], ["NAVIGATION","WATER DEPTH"], ["NAVIGATION","WEL QC'D NAVIGATION"],
-  ["PROCESSED","AVO"], ["PROCESSED","INVERSION"], ["PROCESSED","STACK"],
-  ["SUPPORT","ACQUISITION REPORT"], ["SUPPORT","ACQUISITION SUPPORT DATA"], ["SUPPORT","ACQUISITION SUPPORT DOCUMENTS"],
-  ["SUPPORT","GENERAL"], ["SUPPORT","INTERPRETATION REPORT"], ["SUPPORT","INTERPRETATION SUPPORT DATA"],
-  ["SUPPORT","LOAD SHEET"], ["SUPPORT","NAVIGATION LOGS"], ["SUPPORT","NAVIGATION REPORT"], ["SUPPORT","OBSERVERS LOGS"],
-  ["SUPPORT","PLOT/CHARTS"], ["SUPPORT","PROCESSING FILE"], ["SUPPORT","PROCESSING REPORT"], ["SUPPORT","PROCESSING SUPPORT DATA"],
-  ["SUPPORT","TAPE LOGS"], ["SUPPORT","TRANSCRIPTION REPORT"],
-  ["VELOCITY","AZIMUTH"], ["VELOCITY","DIP"], ["VELOCITY","DELTA"], ["VELOCITY","EPSILON"], ["VELOCITY","ETA"],
-  ["VELOCITY","PHI"], ["VELOCITY","THETA"], ["VELOCITY","SLOPE X"], ["VELOCITY","SLOPE Y"], ["VELOCITY","P-VELOCITY"], ["VELOCITY","S-VELOCITY"]
-];
+// GOVERNANCE_WEL moved to vendor/uqc-governance-data.js (extracted August 2026, confirmed byte-identical with kit-check.html)
 const TAXONOMY_NOTES_WEL = {
   "FIELD|FIELD": "Woodside does not use \"Full=Migration\"/\"Anglestacks=AVO\" naming used by other clients.",
   "PROCESSED|STACK": "ALL stack products go into Stack (not \"Full\"). Do not use \"Full\"/\"Anglestacks\" naming.",
@@ -2723,6 +2557,93 @@ function checkRowXOM(row, idx){
   return dedupeGenericVsSpecific(exs);
 }
 
+/* ===================== HESS International QC engine ===================== */
+// Hess's own governance, matching kit-check.html's checkRowHESS in structure and rule names
+// where the same real column exists in QC Check's export (Last Condition, Created Date,
+// Country, geophysical fields). Deliberately does NOT check Job Number, KDM Barcode, Created
+// For, or Created By - none of these have a real, resolving column in the confirmed 30-column
+// QC Check export (Created For/By specifically match GenV/XOM's own established "load-time
+// enforced, not re-checked here" treatment for this exact same real data).
+function checkRowHESS(row, idx){
+  const hm = state.headerMap;
+  const cat = getVal(row, hm, 'CATEGORY');
+  const sub = getVal(row, hm, 'SUB_CATEGORY');
+  const itemId = getVal(row, hm, 'KDM_ITEM_ID') || (idx+1);
+  const qcName = getVal(row, hm, 'QC_NAME');
+  const exs = [];
+  const digitalFormat = getVal(row, hm, 'DIGITAL_FORMAT');
+  const add = (field, rule, actual, severity, reason) => exs.push({row: idx+2, itemId, qcName, category: cat, sub, digitalFormat, field, rule, actual, severity, reason});
+  const isDuplicateException = hm['EXCEPTION_CODE'] && normKey(getVal(row, hm, 'EXCEPTION_CODE')) === normKey('DUPLICATE');
+  const catKey = normKey(cat), subKey = normKey(sub);
+
+  // 1. Category / Sub-Category - Hess's own taxonomy
+  if(!cat){
+    add('CATEGORY','Required','','FAIL','Category is blank');
+  } else if(!VALID_CATS_HESS.has(catKey)){
+    add('CATEGORY','Allowed list',cat,'FAIL','Category not found in Hess governance taxonomy');
+  } else if(sub && !VALID_PAIRS_HESS.has(catKey+'|'+subKey)){
+    add('SUB_CATEGORY','Allowed list',sub,'FAIL','Sub-Category not valid for this Category in Hess taxonomy');
+  }
+  if(!sub){ add('SUB_CATEGORY','Required','','FAIL','Sub-Category is blank'); }
+
+  // 2. Baseline mandatory field - Last Condition only. Created Date checked separately below
+  // (has its own UNAVAILABLE exemption, matching kit-check.html's treatment).
+  if(!isDuplicateException && hm['LAST_CONDITION'] && !getVal(row, hm, 'LAST_CONDITION'))
+    add('LAST_CONDITION','Required-Field','','FAIL','Last Condition is blank — required for all Hess records');
+
+  // 2b. Title - REVIEW when blank, unless documented as unavailable. Was missing from this
+  // engine entirely until now - matches kit-check.html's checkRowHESS Title check.
+  if(!isDuplicateException && hm['TITLE'] && !getVal(row, hm, 'TITLE') && !isNotedUnavailable(row, hm, ['TITLE']))
+    add('TITLE','Title-Unavailable-Note','','REVIEW',
+      'Title is blank - either populate Title, or document it as unavailable in Description, Comments, or Inventory Remarks (e.g. "UNAVAILABLE: TITLE")');
+
+  // 3. Created Date - with the same UNAVAILABLE: exemption used everywhere else
+  if(!isDuplicateException && hm['CREATED_DATE'] && !getVal(row, hm, 'CREATED_DATE') &&
+     !isNotedUnavailable(row, hm, unavailableKeywordsFor('CREATED_DATE')))
+    add('CREATED_DATE','Required-Field','','FAIL','Created Date is blank — required for Hess records');
+
+  // 4. Country checks - two genuinely separate rules, same as kit-check.html
+  ['SEISMIC_COUNTRY','WELL_COUNTRY','COUNTRY'].forEach(key => {
+    if(!hm[key]) return;
+    const country = getVal(row, hm, key);
+    if(!country) return;
+    const countryKey = normKey(country);
+    if(HESS_OUT_OF_SCOPE_COUNTRY_SET.has(countryKey))
+      add(key,'Hess-Out-Of-Scope-Country',country,'FAIL',
+        '"'+country+'" is out of scope for the Hess International project — should not be actively indexed');
+    if(HESS_INACTIVE_COUNTRY_SET.has(countryKey))
+      add(key,'Hess-Should-Remain-Inactive-Country',country,'FAIL',
+        '"'+country+'" is on the Hess International should-remain-inactive list — data should remain inactive in iGlass');
+  });
+
+  // 5. Last Condition - controlled value + conditional remarks required
+  const HESS_LAST_CONDITION_VALUES = new Set(['ACCEPTABLE','PARTIAL DOCUMENT','POOR','EXTREMELY POOR','UNABLE TO READ'].map(normKey));
+  if(hm['LAST_CONDITION']){
+    const lc = getVal(row, hm, 'LAST_CONDITION');
+    if(lc && !HESS_LAST_CONDITION_VALUES.has(normKey(lc)))
+      add('LAST_CONDITION','Last-Condition-Controlled',lc,'WARN',
+        '"'+lc+'" is not in the approved Last Condition list (Acceptable, Partial Document, Poor, Extremely Poor, Unable To Read)');
+    if(lc && !isDuplicateException){
+      const lcKey = normKey(lc);
+      const needsRemarks = [normKey('POOR'), normKey('EXTREMELY POOR'), normKey('UNABLE TO READ')].includes(lcKey);
+      if(needsRemarks){
+        const remarksText = getRemarksText(row, hm).trim();
+        if(!remarksText)
+          add('ITEM_REMARKS','Last-Condition-Remarks-Required','','FAIL',
+            'Remarks are required when Last Condition is "'+lc+'"');
+      }
+    }
+  }
+
+  // 6. Geophysical/technical field completeness - Hess's own governance data. Correctly
+  // produces nothing on real QC Check data today, since none of these columns exist in the
+  // confirmed real export - see the HESS_GEOPHYSICAL_RULES comment for the reasoning.
+  if(!isDuplicateException) checkGeophysicalHESS(row, hm, cat, sub, add);
+
+  return dedupeGenericVsSpecific(exs);
+}
+
+
 /* Format/extension equivalences: a Digital Format may legitimately show up under a different
    file extension. Used ONLY to suggest a likely real format when Digital Format is UNKNOWN -
    it is never used to flag a mismatch when the format is already a known, valid value. */
@@ -3017,6 +2938,12 @@ function runQC(){
     exceptions.push(...runDuplicateGroupChecks());
     // runOdidbCrossCheck() deliberately NOT called for WEL - Woodside doesn't use the
     // ODIDB-style cross-check GenV/XOM use; a Woodside-specific mechanism doesn't exist yet.
+  } else if(state.client === 'HESS'){
+    state.rows.forEach((row, idx) => { exceptions.push(...checkRowHESS(row, idx)); });
+    exceptions.push(...runDuplicateGroupChecks());
+    // Left in the default ODIDB-enabled bucket below (not excluded like WEL) - no confirmed
+    // evidence either way on whether Hess uses ODIDB, and the check is inert unless a user
+    // separately uploads an ODIDB file, so this is a low-risk default pending confirmation.
   } else {
     state.rows.forEach((row, idx) => { exceptions.push(...checkRowGENV(row, idx)); });
     exceptions.push(...runDuplicateGroupChecks());
