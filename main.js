@@ -7,7 +7,7 @@ function createWindow() {
     height: 880,
     minWidth: 900,
     minHeight: 600,
-    title: 'UQC v1.5.0',
+    title: 'UQC v1.7.0',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false

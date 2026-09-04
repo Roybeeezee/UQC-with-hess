@@ -56,6 +56,10 @@ const options = {
 files.forEach(file => {
   if(!fs.existsSync(file)){
     console.error('Skipping (not found):', file);
+    // Was a bare continue. The build chains `node obfuscate-build.js ... && electron-builder`,
+    // so exiting 0 on failure let a renamed file or a broken block-detection print an error,
+    // succeed, and ship UNOBFUSCATED SOURCE inside the packaged .exe with a green CI run.
+    process.exitCode = 1;
     return;
   }
   let html = fs.readFileSync(file, 'utf8');
@@ -91,6 +95,7 @@ files.forEach(file => {
 
   if(blocks.length === 0){
     console.error('No obfuscatable <script> blocks found in', file);
+    process.exitCode = 1;   // see the note above — never let a failed run exit 0
     return;
   }
 
